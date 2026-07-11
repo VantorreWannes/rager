@@ -1,14 +1,11 @@
 """Embedders for converting text chunks into vector representations."""
 
-from typing import TYPE_CHECKING, Protocol
-
-if TYPE_CHECKING:
-    from rager.types import Embedding
+from typing import Protocol
 
 
-class Embedder(Protocol):
+class Embedder[E](Protocol):
     """Protocol for embedders."""
 
-    async def embed(self, chunk: str) -> Embedding:
+    async def embed(self, chunk: str) -> E:
         """Convert a text chunk into a vector representation."""
         ...
