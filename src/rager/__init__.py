@@ -4,7 +4,11 @@ from rager.chunkers import Chunker
 from rager.embedders import Embedder
 from rager.generators import Generator
 from rager.indexes import Index
-from rager.parsers import Parser
+from rager.parsers import (
+    MarkdownFileParser,
+    Parser,
+    PdfFileParser,
+)
 from rager.scorers import Scorer
 from rager.stores import Store
 from rager.types import Embedding, Hash
@@ -16,8 +20,9 @@ __all__ = [
     "Generator",
     "Hash",
     "Index",
+    "MarkdownFileParser",
     "Parser",
-    "PdfParser",
+    "PdfFileParser",
     "Scorer",
     "Store",
 ]
