@@ -77,3 +77,23 @@ def markdown_file(tmp_path: Path, markdown_data: bytes) -> Path:
     file_path = tmp_path / "sample.md"
     file_path.write_bytes(markdown_data)
     return file_path
+
+
+@pytest.fixture
+@belljar.store
+def csv_data() -> bytes:
+    """Return sample CSV file data for testing."""
+    url = "https://people.sc.fsu.edu/~jburkardt/data/csv/airtravel.csv"
+    belljar.include(url)
+    belljar.check()
+    response = httpx.get(url, timeout=30)
+    response.raise_for_status()
+    return response.content
+
+
+@pytest.fixture
+def csv_file(tmp_path: Path, csv_data: bytes) -> Path:
+    """Return sample CSV file path for testing."""
+    file_path = tmp_path / "airtravel.csv"
+    file_path.write_bytes(csv_data)
+    return file_path

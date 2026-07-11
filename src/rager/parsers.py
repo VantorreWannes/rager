@@ -44,3 +44,4 @@ class UnstructuredFileParser:
 
 PdfFileParser = UnstructuredFileParser
 MarkdownFileParser = UnstructuredFileParser
+CsvFileParser = UnstructuredFileParser
