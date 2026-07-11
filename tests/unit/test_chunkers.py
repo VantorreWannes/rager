@@ -41,6 +41,10 @@ def test_semantic_chunker_chunks(
     # Arrange
     chunker = SemanticChunker("test-model", 1000, 0)
     text = "This is a test document. It has multiple sentences to be split into chunks."
+    model.chunks.return_value = [
+        "This is a test document.",
+        "It has multiple sentences.",
+    ]
 
     # Act
     _ = chunker.chunk(text)

@@ -2,6 +2,7 @@
 
 from rager.chunkers import Chunker
 from rager.embedders import Embedder
+from rager.fusers import Fuser
 from rager.generators import Generator
 from rager.indexes import Index
 from rager.parsers import (
@@ -17,6 +18,7 @@ __all__ = [
     "Chunker",
     "Embedder",
     "Embedding",
+    "Fuser",
     "Generator",
     "Hash",
     "Index",

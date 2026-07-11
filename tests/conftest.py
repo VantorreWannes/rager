@@ -1,14 +1,11 @@
 """Fixtures for tests suite."""
 
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import belljar
 import httpx
 import pytest
 from lorem_text.lorem import paragraphs, words
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 @pytest.fixture
@@ -40,7 +37,7 @@ def paragraphs_file(tmp_path: Path, paragraphs_text: str) -> Path:
 
 
 @pytest.fixture
-@belljar.store
+@belljar.store(Path(".jar/pdf"))
 def pdf_data() -> bytes:
     """Return sample PDF file data for testing."""
     url = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
@@ -60,7 +57,7 @@ def pdf_file(tmp_path: Path, pdf_data: bytes) -> Path:
 
 
 @pytest.fixture
-@belljar.store
+@belljar.store(Path(".jar/markdown"))
 def markdown_data() -> bytes:
     """Return sample Markdown file data for testing."""
     url = "https://gist.githubusercontent.com/rt2zz/e0a1d6ab2682d2c47746950b84c0b6ee/raw/83b8b4814c3417111b9b9bef86a552608506603e/markdown-sample.md"
@@ -80,7 +77,7 @@ def markdown_file(tmp_path: Path, markdown_data: bytes) -> Path:
 
 
 @pytest.fixture
-@belljar.store
+@belljar.store(Path(".jar/csv"))
 def csv_data() -> bytes:
     """Return sample CSV file data for testing."""
     url = "https://people.sc.fsu.edu/~jburkardt/data/csv/airtravel.csv"
