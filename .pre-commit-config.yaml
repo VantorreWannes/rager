@@ -1,0 +1,34 @@
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: lint
+        name: Ruff check
+        entry: uv run ruff check --fix
+        language: system
+        stages: [pre-commit]
+        types: [python]
+      - id: format
+        name: Ruff format
+        entry: uv run ruff format
+        language: system
+        stages: [pre-commit]
+        types: [python]
+      - id: types
+        name: Ty check
+        entry: uv run ty check
+        language: system
+        stages: [pre-commit]
+        types: [python]
+        pass_filenames: false
