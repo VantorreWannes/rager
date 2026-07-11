@@ -10,7 +10,7 @@ requires-python = ">=3.14"
 dependencies = [
     "belljar>=3.0.0",
     "blake3>=1.0.9",
-    "unstructured[pdf]>=0.24.0",
+    "unstructured[md,pdf]>=0.24.0",
 ]
 
 [build-system]
@@ -24,6 +24,7 @@ filterwarnings = [
 addopts = "--cov=rager --cov-report=html --cov-report=term-missing"
 markers = [
     "unit: fast, isolated test of a single component with every external dependency mocked (tests/unit)",
+    "integration: slower tests requiring external dependencies (tests/integration)",
 ]
 
 [tool.ruff.lint]
