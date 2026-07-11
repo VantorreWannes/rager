@@ -38,3 +38,10 @@ repos:
         stages: [pre-commit]
         types: [python]
         pass_filenames: false
+      - id: integration-tests
+        name: Run integration tests
+        entry: uv run pytest -m integration
+        language: system
+        stages: [pre-push]
+        types: [python]
+        pass_filenames: false
