@@ -1,4 +1,4 @@
-"""Stores for persisting text chunk embeddings."""
+"""Stores for persisting embeddings."""
 
 from typing import TYPE_CHECKING, Protocol
 
