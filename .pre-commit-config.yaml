@@ -31,4 +31,3 @@ repos:
         language: system
         stages: [pre-commit]
         types: [python]
-        pass_filenames: false
