@@ -1,6 +1,7 @@
 """Chunkers for splitting units into smaller chunks."""
 
 from functools import cached_property
+from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
 
 import belljar
@@ -42,7 +43,7 @@ class SemanticChunker:
             ),
         )
 
-    @belljar.store
+    @belljar.store(Path(".jar/chunkers"))
     def chunk(self, unit: str) -> list[str]:
         """Split a unit into semantically meaningful chunks."""
         belljar.include(self.model_name)

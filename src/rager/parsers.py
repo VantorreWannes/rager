@@ -1,5 +1,6 @@
 """Parsers for extracting units from files."""
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 import belljar
@@ -7,8 +8,6 @@ import blake3
 from unstructured.partition.auto import partition
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from rager.types import Hash
 
 
@@ -27,7 +26,7 @@ class Parser[F](Protocol):
 class UnstructuredFileParser:
     """Parser for unstructured files."""
 
-    @belljar.store
+    @belljar.store(Path(".jar/parsers"))
     def units(self, file: Path) -> list[str]:
         """Extract text units from the unstructured file."""
         file_id = self.id(file)
