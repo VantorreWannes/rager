@@ -10,7 +10,9 @@ requires-python = ">=3.14"
 dependencies = [
     "belljar>=3.0.0",
     "blake3>=1.0.9",
+    "concresce>=4.0.0",
     "semantic-chunker>=0.2.0",
+    "sentence-transformers>=5.6.0",
     "unstructured[md,pdf]>=0.24.0",
 ]
 
