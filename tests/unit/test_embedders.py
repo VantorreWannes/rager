@@ -1,6 +1,5 @@
 """Unit tests for embedders."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -26,14 +25,15 @@ def test_sentence_transformer_dense_embedder_model(
 
 
 @patch("rager.embedders.SentenceTransformerDenseEmbedder.model")
-def test_sentence_transformer_dense_embedder_encode(model: MagicMock) -> None:
+@pytest.mark.asyncio
+async def test_sentence_transformer_dense_embedder_encode(model: MagicMock) -> None:
     """_encode() encodes the collected batch and returns this caller's vector."""
     # Arrange
     embedder = SentenceTransformerDenseEmbedder("test-model")
     model.encode.return_value.tolist.return_value = [[0.1, 0.2, 0.3]]
 
     # Act
-    result = asyncio.run(embedder._encode("chunk"))  # noqa: SLF001
+    result = await embedder._encode("chunk")  # noqa: SLF001
 
     # Assert
     model.encode.assert_called_once_with(["chunk"], normalize_embeddings=True)
@@ -43,7 +43,8 @@ def test_sentence_transformer_dense_embedder_encode(model: MagicMock) -> None:
 @patch.object(SentenceTransformerDenseEmbedder, "_encode", new_callable=AsyncMock)
 @patch("rager.embedders.belljar.check")
 @patch("rager.embedders.belljar.include")
-def test_sentence_transformer_dense_embedder_embed(
+@pytest.mark.asyncio
+async def test_sentence_transformer_dense_embedder_embed(
     include: MagicMock, check: MagicMock, encode: AsyncMock
 ) -> None:
     """embed() folds its identity into belljar and delegates to _encode."""
@@ -52,7 +53,7 @@ def test_sentence_transformer_dense_embedder_embed(
     encode.return_value = [0.1, 0.2, 0.3]
 
     # Act
-    result = asyncio.run(embedder.embed("chunk"))
+    result = await embedder.embed("chunk")
 
     # Assert
     encode.assert_awaited_once_with("chunk")
