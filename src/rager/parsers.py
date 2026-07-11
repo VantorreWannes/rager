@@ -12,14 +12,14 @@ if TYPE_CHECKING:
     from rager.types import Hash
 
 
-class Parser[D](Protocol):
+class Parser[F](Protocol):
     """Protocol for parsers."""
 
-    def units(self, file: D) -> list[str]:
+    def units(self, file: F) -> list[str]:
         """Return the extracted text units."""
         ...
 
-    def id(self, file: D) -> Hash:
+    def id(self, file: F) -> Hash:
         """Return the file ID."""
         ...
 
