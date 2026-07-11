@@ -8,7 +8,9 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "belljar>=3.0.0",
     "blake3>=1.0.9",
+    "unstructured[pdf]>=0.24.0",
 ]
 
 [build-system]
@@ -16,7 +18,13 @@ requires = ["uv_build>=0.11.28,<0.12.0"]
 build-backend = "uv_build"
 
 [tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning",
+]
 addopts = "--cov=rager --cov-report=html --cov-report=term-missing"
+markers = [
+    "unit: fast, isolated test of a single component with every external dependency mocked (tests/unit)",
+]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -67,8 +75,11 @@ triton-rocm = [
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
+    "lorem-text>=3.0",
     "prek>=0.4.8",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "ruff>=0.15.21",
     "ty>=0.0.58",
 ]

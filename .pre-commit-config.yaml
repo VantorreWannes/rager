@@ -31,3 +31,10 @@ repos:
         language: system
         stages: [pre-commit]
         types: [python]
+      - id: unit-tests
+        name: Run unit tests
+        entry: uv run pytest -m unit
+        language: system
+        stages: [pre-commit]
+        types: [python]
+        pass_filenames: false
