@@ -30,7 +30,8 @@ class PdfParser:
     @belljar.store
     def units(self, file: Path) -> list[str]:
         """Extract text units from PDF content."""
-        belljar.include(file)
+        file_id = self.id(file)
+        belljar.include(file_id.digest())
         belljar.check()
         elements = partition(filename=str(file))
         return [element.text for element in elements]
