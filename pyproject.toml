@@ -18,6 +18,9 @@ requires = ["uv_build>=0.11.28,<0.12.0"]
 build-backend = "uv_build"
 
 [tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning",
+]
 addopts = "--cov=rager --cov-report=html --cov-report=term-missing"
 markers = [
     "unit: fast, isolated test of a single component with every external dependency mocked (tests/unit)",
@@ -72,6 +75,7 @@ triton-rocm = [
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "lorem-text>=3.0",
     "prek>=0.4.8",
     "pytest>=9.1.1",
