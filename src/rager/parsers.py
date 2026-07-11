@@ -9,10 +9,10 @@ if TYPE_CHECKING:
 class TextParser[D](Protocol):
     """Protocol for text parsers."""
 
-    def units(self, data: D) -> list[str]:
+    def units(self, content: D) -> list[str]:
         """Return the extracted text units."""
         ...
 
-    def id(self, data: D) -> Id:
+    def id(self, content: D) -> Id:
         """Return the content ID."""
         ...
