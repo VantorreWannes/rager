@@ -24,12 +24,12 @@ class Parser[D](Protocol):
         ...
 
 
-class PdfParser:
-    """Parser for PDF documents."""
+class UnstructuredFileParser:
+    """Parser for unstructured files."""
 
     @belljar.store
     def units(self, file: Path) -> list[str]:
-        """Extract text units from PDF content."""
+        """Extract text units from the unstructured file."""
         file_id = self.id(file)
         belljar.include(file_id.digest())
         belljar.check()
@@ -37,6 +37,10 @@ class PdfParser:
         return [element.text for element in elements]
 
     def id(self, file: Path) -> Hash:
-        """Return the content ID for PDF."""
+        """Return the content ID for the unstructured file."""
         data = file.read_bytes()
         return blake3.blake3(data)
+
+
+PdfFileParser = UnstructuredFileParser
+MarkdownFileParser = UnstructuredFileParser

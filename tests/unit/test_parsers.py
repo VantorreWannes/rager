@@ -4,13 +4,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from rager.parsers import PdfParser
+from rager.parsers import UnstructuredFileParser
 
 pytestmark = pytest.mark.unit
 
 
 @patch("rager.parsers.blake3.blake3")
-def test_pdf_parser_id(blake3: MagicMock) -> None:
+def test_unstructured_file_parser_id(blake3: MagicMock) -> None:
     """id() hashes the raw bytes of the file."""
     # Arrange
     payload = b"payload"
@@ -18,7 +18,7 @@ def test_pdf_parser_id(blake3: MagicMock) -> None:
     file.read_bytes.return_value = payload
 
     # Act
-    result = PdfParser().id(file)
+    result = UnstructuredFileParser().id(file)
 
     # Assert
     file.read_bytes.assert_called_once_with()
@@ -29,7 +29,7 @@ def test_pdf_parser_id(blake3: MagicMock) -> None:
 @patch("rager.parsers.belljar.check")
 @patch("rager.parsers.belljar.include")
 @patch("rager.parsers.partition")
-def test_pdf_parser_units(
+def test_unstructured_file_parser_units(
     partition: MagicMock,
     include: MagicMock,
     check: MagicMock,
@@ -44,7 +44,7 @@ def test_pdf_parser_units(
     file.read_bytes.return_value = b"payload"
 
     # Act
-    result = PdfParser().units(file)
+    result = UnstructuredFileParser().units(file)
 
     # Assert
     assert result == ["first", "second"]

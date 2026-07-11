@@ -57,3 +57,23 @@ def pdf_file(tmp_path: Path, pdf_data: bytes) -> Path:
     file_path = tmp_path / "sample.pdf"
     file_path.write_bytes(pdf_data)
     return file_path
+
+
+@pytest.fixture
+@belljar.store
+def markdown_data() -> bytes:
+    """Return sample Markdown file data for testing."""
+    url = "https://gist.githubusercontent.com/rt2zz/e0a1d6ab2682d2c47746950b84c0b6ee/raw/83b8b4814c3417111b9b9bef86a552608506603e/markdown-sample.md"
+    belljar.include(url)
+    belljar.check()
+    response = httpx.get(url, timeout=30)
+    response.raise_for_status()
+    return response.content
+
+
+@pytest.fixture
+def markdown_file(tmp_path: Path, markdown_data: bytes) -> Path:
+    """Return sample Markdown file path for testing."""
+    file_path = tmp_path / "sample.md"
+    file_path.write_bytes(markdown_data)
+    return file_path

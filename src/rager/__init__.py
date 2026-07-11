@@ -4,7 +4,7 @@ from rager.chunkers import Chunker
 from rager.embedders import Embedder
 from rager.generators import Generator
 from rager.indexes import Index
-from rager.parsers import Parser, PdfParser
+from rager.parsers import Parser
 from rager.scorers import Scorer
 from rager.stores import Store
 from rager.types import Embedding, Hash

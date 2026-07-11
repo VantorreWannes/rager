@@ -2,15 +2,19 @@
 
 from typing import TYPE_CHECKING
 
-from rager.parsers import PdfParser
+import pytest
+
+from rager.parsers import MarkdownFileParser, PdfFileParser
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+pytestmark = pytest.mark.integration
 
-def test_pdf_parser_id(pdf_file: Path) -> None:
+
+def test_pdf_file_parser_id(pdf_file: Path) -> None:
     """Test that the PDF parser correctly extracts the document ID."""
-    parser = PdfParser()
+    parser = PdfFileParser()
     document_id = parser.id(pdf_file)
     assert (
         document_id.hexdigest()
@@ -18,8 +22,26 @@ def test_pdf_parser_id(pdf_file: Path) -> None:
     )
 
 
-def test_pdf_parser_content(pdf_file: Path) -> None:
+def test_pdf_file_parser_units(pdf_file: Path) -> None:
     """Test that the PDF parser correctly extracts the document content."""
-    parser = PdfParser()
+    parser = PdfFileParser()
     content = parser.units(pdf_file)
     assert len(content) == 1
+
+
+def test_markdown_file_parser_id(markdown_file: Path) -> None:
+    """Test that the Markdown parser correctly extracts the document ID."""
+    parser = MarkdownFileParser()
+    document_id = parser.id(markdown_file)
+    assert (
+        document_id.hexdigest()
+        == "5b99e74be511c0d4dbbbcfcbc3f151e5e5823da25efc84e40f22163c28a38730"
+    )
+
+
+def test_markdown_file_parser_units(markdown_file: Path) -> None:
+    """Test that the Markdown parser correctly extracts the document content."""
+    parser = MarkdownFileParser()
+    content = parser.units(markdown_file)
+    expected_length = 53
+    assert len(content) == expected_length
