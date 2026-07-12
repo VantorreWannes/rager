@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from rager.embedders import SentenceTransformerDenseEmbedder
-from rager.indexes import DenseIndex
+from rager.embedders import SentenceTransformerDenseEmbedder, SpladeSparseEmbedder
+from rager.indexes import DenseIndex, SparseIndex
 
 pytestmark = pytest.mark.integration
 
@@ -113,6 +113,19 @@ async def test_dense_index_with_dense_embedder() -> None:
     """Embeddings from the dense embedder retrieve the semantically closest chunk."""
     embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
     index = DenseIndex(384, results=2)
+    cats_key = await index.add(await embedder.embed("Cats purr when they are happy."))
+    await index.add(await embedder.embed("The stock market closed higher today."))
+
+    result = await index.similar(await embedder.embed("A kitten is purring."))
+
+    assert result[0] == cats_key
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_with_sparse_embedder() -> None:
+    """Embeddings from the sparse embedder retrieve the closest chunk."""
+    embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
+    index = SparseIndex(results=2)
     cats_key = await index.add(await embedder.embed("Cats purr when they are happy."))
     await index.add(await embedder.embed("The stock market closed higher today."))
 

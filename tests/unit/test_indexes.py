@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from rager.indexes import DenseIndex
+from rager.indexes import DenseIndex, SparseIndex
 
 pytestmark = pytest.mark.unit
 
@@ -194,3 +194,159 @@ async def test_dense_index_similar_scatters_concurrent_queries(
     faiss_index.search.assert_called_once()
     assert first == [7, 3]
     assert second == [5]
+
+
+def test_sparse_index_init() -> None:
+    """__init__() stores the results count."""
+    # Arrange
+    results = 5
+
+    # Act
+    index = SparseIndex(results=results)
+
+    # Assert
+    assert index.results == results
+
+
+def test_sparse_index_key_ignores_insertion_order() -> None:
+    """_key() derives the same key regardless of dict insertion order."""
+    # Act
+    key = SparseIndex._key({1: 0.5, 9: 1.5})
+
+    # Assert
+    assert key == SparseIndex._key({9: 1.5, 1: 0.5})
+    assert key != SparseIndex._key({1: 0.5, 9: 2.5})
+
+
+def test_sparse_index_score() -> None:
+    """_score() sums the weight products of shared tokens."""
+    # Arrange
+    query = {1: 2.0, 2: 3.0, 4: 1.0}
+    stored = {1: 0.5, 2: 1.0}
+    expected_score = 4.0
+
+    # Act & Assert
+    assert SparseIndex._score(query, stored) == expected_score
+    assert SparseIndex._score(stored, query) == expected_score
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_add_is_idempotent() -> None:
+    """Adding the same embedding twice yields one key and one entry."""
+    # Arrange
+    index = SparseIndex()
+
+    # Act
+    first = await index.add({1: 1.0})
+    second = await index.add({1: 1.0})
+
+    # Assert
+    assert first == second
+    assert await index.similar({1: 1.0}) == [first]
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_similar_ranks_nearest_first() -> None:
+    """similar() returns keys ordered by inner-product similarity."""
+    # Arrange
+    index = SparseIndex()
+    x_key = await index.add({1: 1.0})
+    y_key = await index.add({1: 0.5, 2: 0.5})
+
+    # Act & Assert
+    assert await index.similar({1: 1.0}) == [x_key, y_key]
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_similar_drops_non_matching_keys() -> None:
+    """similar() omits stored embeddings sharing no tokens with the query."""
+    # Arrange
+    index = SparseIndex()
+    x_key = await index.add({1: 1.0})
+    await index.add({2: 1.0})
+
+    # Act & Assert
+    assert await index.similar({1: 1.0}) == [x_key]
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_similar_caps_results() -> None:
+    """similar() returns at most the configured number of results."""
+    # Arrange
+    index = SparseIndex(results=1)
+    x_key = await index.add({1: 1.0})
+    await index.add({1: 0.5})
+
+    # Act & Assert
+    assert await index.similar({1: 1.0}) == [x_key]
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_similar_on_empty_index() -> None:
+    """similar() on an empty index returns no keys."""
+    # Arrange
+    index = SparseIndex()
+
+    # Act & Assert
+    assert await index.similar({1: 1.0}) == []
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_remove_drops_key_from_results() -> None:
+    """Removed keys no longer appear in similarity results."""
+    # Arrange
+    index = SparseIndex()
+    x_key = await index.add({1: 1.0})
+    y_key = await index.add({1: 0.5})
+
+    # Act
+    await index.remove(x_key)
+
+    # Assert
+    assert await index.similar({1: 1.0}) == [y_key]
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_remove_of_absent_key_is_noop() -> None:
+    """Removing a key that was never added leaves the index unchanged."""
+    # Arrange
+    index = SparseIndex()
+    x_key = await index.add({1: 1.0})
+
+    # Act
+    await index.remove(x_key + 1)
+
+    # Assert
+    assert await index.similar({1: 1.0}) == [x_key]
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_batches_concurrent_calls() -> None:
+    """Concurrent calls are batched, yet each caller gets its own result."""
+    # Arrange
+    index = SparseIndex()
+
+    # Act
+    x_key, y_key = await asyncio.gather(index.add({1: 1.0}), index.add({2: 1.0}))
+    x_result, y_result = await asyncio.gather(
+        index.similar({1: 1.0}), index.similar({2: 1.0})
+    )
+
+    # Assert
+    assert x_result == [x_key]
+    assert y_result == [y_key]
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_does_not_batch_across_instances() -> None:
+    """Concurrent calls on different indexes land in their own index."""
+    # Arrange
+    first = SparseIndex()
+    second = SparseIndex()
+
+    # Act
+    x_key, y_key = await asyncio.gather(first.add({1: 1.0}), second.add({2: 1.0}))
+
+    # Assert
+    assert await first.similar({1: 1.0, 2: 1.0}) == [x_key]
+    assert await second.similar({1: 1.0, 2: 1.0}) == [y_key]
