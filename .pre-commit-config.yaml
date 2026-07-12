@@ -45,3 +45,10 @@ repos:
         stages: [pre-push]
         types: [python]
         pass_filenames: false
+      - id: application-tests
+        name: Run application tests
+        entry: uv run pytest -m application
+        language: system
+        stages: [pre-push]
+        types: [python]
+        pass_filenames: false
