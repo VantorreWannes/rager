@@ -31,13 +31,10 @@ class Index[E, K](Protocol):
         ...
 
 
-_BATCH_WINDOW = timedelta(milliseconds=100)
-
-
 class DenseIndex:
     """Dense embedding index backed by a flat FAISS inner-product index."""
 
-    def __init__(self, dimensions: int, results: int = 10) -> None:
+    def __init__(self, dimensions: int, results: int = 100) -> None:
         """Initialize the FAISS index with the specified embedding dimension."""
         self.dimensions = dimensions
         self.results = results
@@ -46,17 +43,17 @@ class DenseIndex:
     @cached_property
     def add(self) -> Callable[[DenseEmbedding], Awaitable[int]]:
         """Add an embedding to the index and return its key."""
-        return concresce.batch(window=_BATCH_WINDOW)(self._add)
+        return concresce.batch(window=timedelta(milliseconds=100))(self._add)
 
     @cached_property
     def remove(self) -> Callable[[int], Awaitable[None]]:
         """Remove an embedding from the index by its key."""
-        return concresce.batch(window=_BATCH_WINDOW)(self._remove)
+        return concresce.batch(window=timedelta(milliseconds=100))(self._remove)
 
     @cached_property
     def similar(self) -> Callable[[DenseEmbedding], Awaitable[list[int]]]:
         """Retrieve the most similar embedding keys to the given embedding."""
-        return concresce.batch(window=_BATCH_WINDOW)(self._similar)
+        return concresce.batch(window=timedelta(milliseconds=100))(self._similar)
 
     @staticmethod
     def _to_rows(embeddings: list[DenseEmbedding]) -> np.ndarray:
@@ -98,7 +95,7 @@ class DenseIndex:
 class SparseIndex:
     """Sparse embedding index using inner-product similarity over weight maps."""
 
-    def __init__(self, results: int = 10) -> None:
+    def __init__(self, results: int = 100) -> None:
         """Initialize the sparse index."""
         self.results = results
         self._embeddings: dict[int, SparseEmbedding] = {}
@@ -106,17 +103,17 @@ class SparseIndex:
     @cached_property
     def add(self) -> Callable[[SparseEmbedding], Awaitable[int]]:
         """Add an embedding to the index and return its key."""
-        return concresce.batch(window=_BATCH_WINDOW)(self._add)
+        return concresce.batch(window=timedelta(milliseconds=100))(self._add)
 
     @cached_property
     def remove(self) -> Callable[[int], Awaitable[None]]:
         """Remove an embedding from the index by its key."""
-        return concresce.batch(window=_BATCH_WINDOW)(self._remove)
+        return concresce.batch(window=timedelta(milliseconds=100))(self._remove)
 
     @cached_property
     def similar(self) -> Callable[[SparseEmbedding], Awaitable[list[int]]]:
         """Retrieve the most similar embedding keys to the given embedding."""
-        return concresce.batch(window=_BATCH_WINDOW)(self._similar)
+        return concresce.batch(window=timedelta(milliseconds=100))(self._similar)
 
     @staticmethod
     def _key(embedding: SparseEmbedding) -> int:
