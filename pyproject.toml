@@ -63,12 +63,18 @@ explicit = true
 [project.optional-dependencies]
 cpu = [
   "torch>=2.13.0",
+  "torchvision>=0.28.0",
 ]
 cu130 = [
   "torch>=2.13.0",
+  "torchvision>=0.28.0",
 ]
 rocm = [
   "torch>=2.13.0",
+  "torchvision>=0.28.0",
+  # triton-rocm ships only the AMD backend overlay; base triton provides
+  # triton/__init__.py and triton.language, so both must be installed together.
+  "triton>=3.7.1",
   "triton-rocm>=2.13.0",
 ]
 
@@ -76,6 +82,14 @@ rocm = [
 torch = [
   { index = "pytorch-cpu", extra = "cpu" },
   { index = "pytorch-cu130", extra = "cu130" },
+  { index = "pytorch-rocm", extra = "rocm" },
+]
+torchvision = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu130", extra = "cu130" },
+  { index = "pytorch-rocm", extra = "rocm" },
+]
+triton = [
   { index = "pytorch-rocm", extra = "rocm" },
 ]
 triton-rocm = [

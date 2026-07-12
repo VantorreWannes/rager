@@ -29,7 +29,7 @@ class Embedder[E](Protocol):
 class SentenceTransformerDenseEmbedder:
     """Dense embedding using SentenceTransformer."""
 
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
         """Initialize the dense embedder with a specific model."""
         self.model_name = model_name
 
@@ -41,7 +41,7 @@ class SentenceTransformerDenseEmbedder:
     @cached_property
     def _encode(self) -> Callable[[str], Awaitable[DenseEmbedding]]:
         """Coalesce concurrent calls into per-instance encoding batches."""
-        return concresce.batch(window=timedelta(milliseconds=100))(self._encode_batch)
+        return concresce.batch(window=timedelta(milliseconds=1))(self._encode_batch)
 
     async def _encode_batch(self, chunk: str) -> DenseEmbedding:
         """Convert a text chunk into a vector representation."""
@@ -61,7 +61,7 @@ class SentenceTransformerDenseEmbedder:
 class SpladeSparseEmbedder:
     """Sparse embedding using a SPLADE SparseEncoder."""
 
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str = "prithivida/Splade_PP_en_v1") -> None:
         """Initialize the sparse embedder with a specific model."""
         self.model_name = model_name
 
@@ -98,7 +98,7 @@ class SpladeSparseEmbedder:
     @cached_property
     def _encode(self) -> Callable[[str], Awaitable[SparseEmbedding]]:
         """Coalesce concurrent calls into per-instance encoding batches."""
-        return concresce.batch(window=timedelta(milliseconds=100))(self._encode_batch)
+        return concresce.batch(window=timedelta(milliseconds=1))(self._encode_batch)
 
     async def _encode_batch(self, chunk: str) -> SparseEmbedding:
         """Convert a text chunk into a sparse vector representation."""

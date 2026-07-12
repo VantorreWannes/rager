@@ -24,7 +24,7 @@ class Scorer(Protocol):
 class CrossEncoderScorer:
     """Scorer that reranks chunks with a sentence-transformers cross-encoder."""
 
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L6-v2") -> None:
         """Initialize the scorer with a specific model."""
         self.model_name = model_name
 
@@ -36,7 +36,7 @@ class CrossEncoderScorer:
     @cached_property
     def _predict(self) -> Callable[[str, str], Awaitable[float]]:
         """Coalesce concurrent calls into per-instance prediction batches."""
-        return concresce.batch(window=timedelta(milliseconds=100))(self._predict_batch)
+        return concresce.batch(window=timedelta(milliseconds=1))(self._predict_batch)
 
     async def _predict_batch(self, query: str, chunk: str) -> float:
         """Score a query-chunk pair with the cross-encoder."""
