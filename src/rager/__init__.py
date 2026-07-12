@@ -3,7 +3,7 @@
 from rager.chunkers import Chunker
 from rager.embedders import Embedder
 from rager.fusers import BordaCountFuser, Fuser, ReciprocalRankFuser
-from rager.generators import Generator
+from rager.generators import Generator, TransformersGenerator
 from rager.indexes import DenseIndex, Index, SparseIndex
 from rager.parsers import (
     MarkdownFileParser,
@@ -36,4 +36,5 @@ __all__ = [
     "SparseEmbedding",
     "SparseIndex",
     "Store",
+    "TransformersGenerator",
 ]

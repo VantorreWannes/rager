@@ -2029,6 +2029,8 @@ dependencies = [
     { name = "numpy" },
     { name = "semantic-chunker" },
     { name = "sentence-transformers" },
+    { name = "tokenizers" },
+    { name = "transformers" },
     { name = "unstructured", extra = ["md", "pdf"] },
 ]
 
@@ -2065,9 +2067,11 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "semantic-chunker", specifier = ">=0.2.0" },
     { name = "sentence-transformers", specifier = ">=5.6.0" },
+    { name = "tokenizers", specifier = ">=0.22.2" },
     { name = "torch", marker = "extra == 'cpu'", specifier = ">=2.13.0", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "rager", extra = "cpu" } },
     { name = "torch", marker = "extra == 'cu130'", specifier = ">=2.13.0", index = "https://download.pytorch.org/whl/cu130", conflict = { package = "rager", extra = "cu130" } },
     { name = "torch", marker = "extra == 'rocm'", specifier = ">=2.13.0", index = "https://download.pytorch.org/whl/rocm7.2", conflict = { package = "rager", extra = "rocm" } },
+    { name = "transformers", specifier = ">=5.13.1" },
     { name = "triton-rocm", marker = "extra == 'rocm'", specifier = ">=2.13.0", index = "https://download.pytorch.org/whl/rocm7.2", conflict = { package = "rager", extra = "rocm" } },
     { name = "unstructured", extras = ["md", "pdf"], specifier = ">=0.24.0" },
 ]
