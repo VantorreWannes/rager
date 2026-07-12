@@ -11,11 +11,12 @@ from rager.parsers import (
     PdfFileParser,
 )
 from rager.scorers import CrossEncoderScorer, Scorer
-from rager.stores import MetadataStore, Store
+from rager.stores import ChunkStore, MetadataStore, Store
 from rager.types import DenseEmbedding, Hash, Metadata, SparseEmbedding
 
 __all__ = [
     "BordaCountFuser",
+    "ChunkStore",
     "Chunker",
     "CrossEncoderScorer",
     "DenseEmbedding",

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import blake3
 import pytest
 
-from rager.stores import EmbeddingStore, MetadataStore
+from rager.stores import ChunkStore, EmbeddingStore, MetadataStore
 
 if TYPE_CHECKING:
     from rager.types import Hash
@@ -80,6 +80,66 @@ def test_embedding_store_remove_of_absent_key_is_noop() -> None:
 
     # Assert
     assert store.get(1) == [0.1]
+
+
+def test_chunk_store_add_and_get() -> None:
+    """get() returns the chunk text stored under the key."""
+    # Arrange
+    store = ChunkStore()
+
+    # Act
+    store.add(1, "a chunk")
+
+    # Assert
+    assert store.get(1) == "a chunk"
+
+
+def test_chunk_store_get_of_absent_key_returns_none() -> None:
+    """get() returns None for a key that was never added."""
+    # Arrange
+    store = ChunkStore()
+
+    # Act & Assert
+    assert store.get(1) is None
+
+
+def test_chunk_store_add_overwrites_existing_key() -> None:
+    """add() replaces the chunk text stored under an existing key."""
+    # Arrange
+    store = ChunkStore()
+
+    # Act
+    store.add(1, "old")
+    store.add(1, "new")
+
+    # Assert
+    assert store.get(1) == "new"
+
+
+def test_chunk_store_remove() -> None:
+    """remove() deletes the chunk text stored under the key."""
+    # Arrange
+    store = ChunkStore()
+    store.add(1, "a chunk")
+
+    # Act
+    store.remove(1)
+
+    # Assert
+    assert store.get(1) is None
+
+
+def test_chunk_store_remove_of_absent_key_is_noop() -> None:
+    """remove() of a key that was never added leaves the store unchanged."""
+    # Arrange
+    store = ChunkStore()
+    store.add(1, "a chunk")
+
+    # Act
+    store.remove(2)
+
+    # Assert
+    assert store.get(1) == "a chunk"
 
 
 def test_metadata_store_add_and_get() -> None:
