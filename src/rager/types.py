@@ -3,4 +3,5 @@
 from blake3 import blake3
 
 Hash = blake3
-Embedding = list[float]
+DenseEmbedding = list[float]
+SparseEmbedding = dict[int, float]

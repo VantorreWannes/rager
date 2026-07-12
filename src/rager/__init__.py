@@ -12,12 +12,12 @@ from rager.parsers import (
 )
 from rager.scorers import Scorer
 from rager.stores import Store
-from rager.types import Embedding, Hash
+from rager.types import DenseEmbedding, Hash, SparseEmbedding
 
 __all__ = [
     "Chunker",
+    "DenseEmbedding",
     "Embedder",
-    "Embedding",
     "Fuser",
     "Generator",
     "Hash",
@@ -26,5 +26,6 @@ __all__ = [
     "Parser",
     "PdfFileParser",
     "Scorer",
+    "SparseEmbedding",
     "Store",
 ]
