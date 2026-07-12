@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from rager.types import DenseEmbedding, SparseEmbedding
+from rager.types import DenseEmbedding, Metadata, SparseEmbedding
 
 
 class Store[V, K](Protocol):
@@ -43,3 +43,23 @@ class EmbeddingStore[E]:
 
 DenseEmbeddingStore = EmbeddingStore[DenseEmbedding]
 SparseEmbeddingStore = EmbeddingStore[SparseEmbedding]
+
+
+class MetadataStore[M: Metadata]:
+    """In-memory store mapping embedding keys to chunk metadata."""
+
+    def __init__(self) -> None:
+        """Initialize the store with no metadata."""
+        self._metadata: dict[int, M] = {}
+
+    def add(self, key: int, value: M) -> None:
+        """Store metadata with the given key."""
+        self._metadata[key] = value
+
+    def get(self, key: int) -> M | None:
+        """Retrieve metadata by its key."""
+        return self._metadata.get(key)
+
+    def remove(self, key: int) -> None:
+        """Remove metadata by its key."""
+        self._metadata.pop(key, None)
