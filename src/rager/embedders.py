@@ -10,7 +10,7 @@ import concresce
 from sentence_transformers import SentenceTransformer, SparseEncoder
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Awaitable, Callable, Iterable, Iterator
 
     from torch import Tensor
 
@@ -38,8 +38,12 @@ class SentenceTransformerDenseEmbedder:
         """Load the SentenceTransformer model."""
         return SentenceTransformer(self.model_name)
 
-    @concresce.batch(window=timedelta(milliseconds=100))
-    async def _encode(self, chunk: str) -> DenseEmbedding:
+    @cached_property
+    def _encode(self) -> Callable[[str], Awaitable[DenseEmbedding]]:
+        """Coalesce concurrent calls into per-instance encoding batches."""
+        return concresce.batch(window=timedelta(milliseconds=100))(self._encode_batch)
+
+    async def _encode_batch(self, chunk: str) -> DenseEmbedding:
         """Convert a text chunk into a vector representation."""
         chunks = await concresce.collect(chunk)
         embeddings = self.model.encode(chunks, normalize_embeddings=True).tolist()
@@ -91,8 +95,12 @@ class SpladeSparseEmbedder:
         """Split a coalesced sparse tensor into one weight map per input row."""
         return cls._group_by_row(cls._decode_entries(coalesced), count)
 
-    @concresce.batch(window=timedelta(milliseconds=100))
-    async def _encode(self, chunk: str) -> SparseEmbedding:
+    @cached_property
+    def _encode(self) -> Callable[[str], Awaitable[SparseEmbedding]]:
+        """Coalesce concurrent calls into per-instance encoding batches."""
+        return concresce.batch(window=timedelta(milliseconds=100))(self._encode_batch)
+
+    async def _encode_batch(self, chunk: str) -> SparseEmbedding:
         """Convert a text chunk into a sparse vector representation."""
         chunks = await concresce.collect(chunk)
         coalesced = self.model.encode(chunks).coalesce()
