@@ -4,7 +4,7 @@ from rager.chunkers import Chunker
 from rager.embedders import Embedder
 from rager.fusers import Fuser
 from rager.generators import Generator
-from rager.indexes import Index
+from rager.indexes import DenseIndex, Index, SparseIndex
 from rager.parsers import (
     MarkdownFileParser,
     Parser,
@@ -17,6 +17,7 @@ from rager.types import DenseEmbedding, Hash, SparseEmbedding
 __all__ = [
     "Chunker",
     "DenseEmbedding",
+    "DenseIndex",
     "Embedder",
     "Fuser",
     "Generator",
@@ -27,5 +28,6 @@ __all__ = [
     "PdfFileParser",
     "Scorer",
     "SparseEmbedding",
+    "SparseIndex",
     "Store",
 ]
