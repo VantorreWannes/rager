@@ -98,6 +98,23 @@ async def test_dense_index_add_batches_concurrent_calls(faiss: MagicMock) -> Non
 
 @patch("rager.indexes.faiss")
 @pytest.mark.asyncio
+async def test_dense_index_does_not_batch_across_instances(faiss: MagicMock) -> None:
+    """Concurrent add() calls on different indexes stay in separate batches."""
+    # Arrange
+    first = DenseIndex(3)
+    second = DenseIndex(3)
+    faiss_index = faiss.IndexIDMap2.return_value
+
+    # Act
+    await asyncio.gather(first.add([1.0, 0.0, 0.0]), second.add([0.0, 1.0, 0.0]))
+
+    # Assert
+    expected_calls = 2
+    assert faiss_index.add_with_ids.call_count == expected_calls
+
+
+@patch("rager.indexes.faiss")
+@pytest.mark.asyncio
 async def test_dense_index_remove(faiss: MagicMock) -> None:
     """remove() removes the entry matching the given key."""
     # Arrange

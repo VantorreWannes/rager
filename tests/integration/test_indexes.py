@@ -80,6 +80,20 @@ async def test_dense_index_batches_concurrent_adds() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dense_index_instances_do_not_share_batches() -> None:
+    """Concurrent calls on different indexes land in their own index."""
+    first = DenseIndex(3)
+    second = DenseIndex(3)
+
+    x_key, y_key = await asyncio.gather(
+        first.add([1.0, 0.0, 0.0]), second.add([0.0, 1.0, 0.0])
+    )
+
+    assert await first.similar([0.0, 1.0, 0.0]) == [x_key]
+    assert await second.similar([1.0, 0.0, 0.0]) == [y_key]
+
+
+@pytest.mark.asyncio
 async def test_dense_index_answers_concurrent_queries() -> None:
     """Concurrent similar() calls are batched, yet each gets its own ranking."""
     index = DenseIndex(3)

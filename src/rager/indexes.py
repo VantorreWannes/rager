@@ -1,6 +1,7 @@
 """Embedding Index protocol definitions."""
 
 from datetime import timedelta
+from functools import cached_property
 from typing import TYPE_CHECKING, Protocol
 
 import blake3
@@ -9,6 +10,8 @@ import faiss
 import numpy as np
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from rager import DenseEmbedding
 
 
@@ -28,6 +31,9 @@ class Index[E, K](Protocol):
         ...
 
 
+_BATCH_WINDOW = timedelta(milliseconds=100)
+
+
 class DenseIndex:
     """Dense embedding index backed by a flat FAISS inner-product index."""
 
@@ -36,6 +42,21 @@ class DenseIndex:
         self.dimensions = dimensions
         self.results = results
         self._index = faiss.IndexIDMap2(faiss.IndexFlatIP(dimensions))
+
+    @cached_property
+    def add(self) -> Callable[[DenseEmbedding], Awaitable[int]]:
+        """Add an embedding to the index and return its key."""
+        return concresce.batch(window=_BATCH_WINDOW)(self._add)
+
+    @cached_property
+    def remove(self) -> Callable[[int], Awaitable[None]]:
+        """Remove an embedding from the index by its key."""
+        return concresce.batch(window=_BATCH_WINDOW)(self._remove)
+
+    @cached_property
+    def similar(self) -> Callable[[DenseEmbedding], Awaitable[list[int]]]:
+        """Retrieve the most similar embedding keys to the given embedding."""
+        return concresce.batch(window=_BATCH_WINDOW)(self._similar)
 
     @staticmethod
     def _to_rows(embeddings: list[DenseEmbedding]) -> np.ndarray:
@@ -48,8 +69,7 @@ class DenseIndex:
         digest = blake3.blake3(row.tobytes()).digest()
         return int.from_bytes(digest[:8], "little", signed=True)
 
-    @concresce.batch(window=timedelta(milliseconds=100))
-    async def add(self, embedding: DenseEmbedding) -> int:
+    async def _add(self, embedding: DenseEmbedding) -> int:
         """Add an embedding to the index and return its key."""
         embeddings = await concresce.collect(embedding)
         rows = self._to_rows(embeddings)
@@ -60,16 +80,14 @@ class DenseIndex:
         self._index.add_with_ids(self._to_rows(list(unique.values())), ids)
         return concresce.scatter(keys)
 
-    @concresce.batch(window=timedelta(milliseconds=100))
-    async def remove(self, key: int) -> None:
+    async def _remove(self, key: int) -> None:
         """Remove an embedding from the index by its key."""
         keys = await concresce.collect(key)
         ids = np.asarray(keys, dtype=np.int64)
         self._index.remove_ids(faiss.IDSelectorBatch(ids))
         return concresce.scatter([None] * len(keys))
 
-    @concresce.batch(window=timedelta(milliseconds=100))
-    async def similar(self, embedding: DenseEmbedding) -> list[int]:
+    async def _similar(self, embedding: DenseEmbedding) -> list[int]:
         """Retrieve the most similar embedding keys to the given embedding."""
         embeddings = await concresce.collect(embedding)
         _, ids = self._index.search(self._to_rows(embeddings), self.results)
