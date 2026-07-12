@@ -1,5 +1,7 @@
 """Integration tests for indexes."""
 
+import asyncio
+
 import pytest
 
 from rager.embedders import SentenceTransformerDenseEmbedder
@@ -62,6 +64,34 @@ async def test_dense_index_similar_on_empty_index() -> None:
     index = DenseIndex(3)
 
     assert await index.similar([1.0, 0.0, 0.0]) == []
+
+
+@pytest.mark.asyncio
+async def test_dense_index_batches_concurrent_adds() -> None:
+    """Concurrent add() calls are batched, yet each caller gets its own key."""
+    index = DenseIndex(3)
+
+    x_key, y_key = await asyncio.gather(
+        index.add([1.0, 0.0, 0.0]), index.add([0.0, 1.0, 0.0])
+    )
+
+    assert x_key != y_key
+    assert await index.similar([1.0, 0.0, 0.0]) == [x_key, y_key]
+
+
+@pytest.mark.asyncio
+async def test_dense_index_answers_concurrent_queries() -> None:
+    """Concurrent similar() calls are batched, yet each gets its own ranking."""
+    index = DenseIndex(3)
+    x_key = await index.add([1.0, 0.0, 0.0])
+    y_key = await index.add([0.0, 1.0, 0.0])
+
+    x_result, y_result = await asyncio.gather(
+        index.similar([1.0, 0.0, 0.0]), index.similar([0.0, 1.0, 0.0])
+    )
+
+    assert x_result == [x_key, y_key]
+    assert y_result == [y_key, x_key]
 
 
 @pytest.mark.asyncio
