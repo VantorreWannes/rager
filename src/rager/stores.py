@@ -45,6 +45,26 @@ DenseEmbeddingStore = EmbeddingStore[DenseEmbedding]
 SparseEmbeddingStore = EmbeddingStore[SparseEmbedding]
 
 
+class ChunkStore:
+    """In-memory store mapping chunk indexes to chunk text."""
+
+    def __init__(self) -> None:
+        """Initialize the store with no chunks."""
+        self._chunks: dict[int, str] = {}
+
+    def add(self, key: int, value: str) -> None:
+        """Store chunk text with the given key."""
+        self._chunks[key] = value
+
+    def get(self, key: int) -> str | None:
+        """Retrieve chunk text by its key."""
+        return self._chunks.get(key)
+
+    def remove(self, key: int) -> None:
+        """Remove chunk text by its key."""
+        self._chunks.pop(key, None)
+
+
 class MetadataStore[M: Metadata]:
     """In-memory store mapping embedding keys to chunk metadata."""
 
