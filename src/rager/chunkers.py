@@ -1,5 +1,6 @@
 """Chunkers for splitting units into smaller chunks."""
 
+import logging
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
@@ -9,6 +10,8 @@ from semantic_chunker import get_chunker
 
 if TYPE_CHECKING:
     from semantic_text_splitter import TextSplitter
+
+logger = logging.getLogger(__name__)
 
 
 class Chunker(Protocol):
@@ -36,6 +39,12 @@ class SemanticChunker:
     @cached_property
     def model(self) -> TextSplitter:
         """Get the text splitter instance."""
+        logger.info(
+            "Loading semantic chunker for model %r (chunk_size=%d, overlap=%d)",
+            self.model_name,
+            self.chunk_size,
+            self.overlap,
+        )
         return cast(
             "TextSplitter",
             get_chunker(
@@ -56,4 +65,7 @@ class SemanticChunker:
         belljar.include(self.overlap)
         belljar.include(unit)
         belljar.check()
-        return self.model.chunks(unit)
+        logger.debug("Cache miss; chunking unit of %d characters", len(unit))
+        chunks = self.model.chunks(unit)
+        logger.debug("Split unit into %d chunks", len(chunks))
+        return chunks

@@ -1,5 +1,6 @@
 """Rerankers for scoring chunks based on relevance."""
 
+import logging
 from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
@@ -11,6 +12,8 @@ from sentence_transformers import CrossEncoder
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+
+logger = logging.getLogger(__name__)
 
 
 class Scorer(Protocol):
@@ -31,6 +34,7 @@ class CrossEncoderScorer:
     @cached_property
     def model(self) -> CrossEncoder:
         """Load the CrossEncoder model."""
+        logger.info("Loading CrossEncoder model %r", self.model_name)
         return CrossEncoder(self.model_name)
 
     @cached_property
@@ -41,6 +45,11 @@ class CrossEncoderScorer:
     async def _predict_batch(self, query: str, chunk: str) -> float:
         """Score a query-chunk pair with the cross-encoder."""
         pairs = await concresce.collect((query, chunk))
+        logger.debug(
+            "Scoring batch of %d query-chunk pairs with %r",
+            len(pairs),
+            self.model_name,
+        )
         scores = self.model.predict(pairs).tolist()
         return concresce.scatter(scores)
 
@@ -51,4 +60,5 @@ class CrossEncoderScorer:
         belljar.include(query)
         belljar.include(chunk)
         belljar.check()
+        logger.debug("Cache miss; scoring chunk of %d characters", len(chunk))
         return await self._predict(query, chunk)

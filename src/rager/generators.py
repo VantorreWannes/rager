@@ -1,5 +1,6 @@
 """Generators for producing answers to prompts."""
 
+import logging
 from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
@@ -13,6 +14,8 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from transformers import TextGenerationPipeline
+
+logger = logging.getLogger(__name__)
 
 
 class Generator(Protocol):
@@ -38,6 +41,7 @@ class TransformersGenerator:
     @cached_property
     def model(self) -> TextGenerationPipeline:
         """Load the text-generation pipeline."""
+        logger.info("Loading text-generation pipeline for model %r", self.model_name)
         return pipeline("text-generation", model=self.model_name)
 
     @cached_property
@@ -48,6 +52,12 @@ class TransformersGenerator:
     async def _generate_batch(self, query: str) -> str:
         """Generate an answer for each query in the collected batch."""
         queries = await concresce.collect(query)
+        logger.debug(
+            "Generating answers for a batch of %d queries with %r (max_new_tokens=%d)",
+            len(queries),
+            self.model_name,
+            self.max_new_tokens,
+        )
         chats = [[{"role": "user", "content": query}] for query in queries]
         outputs = self.model(
             chats,
@@ -64,4 +74,7 @@ class TransformersGenerator:
         belljar.include(self.max_new_tokens)
         belljar.include(query)
         belljar.check()
+        logger.debug(
+            "Cache miss; generating answer for query of %d characters", len(query)
+        )
         return await self._generate(query)

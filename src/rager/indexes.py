@@ -1,5 +1,6 @@
 """Embedding Index protocol definitions."""
 
+import logging
 from datetime import timedelta
 from functools import cached_property
 from typing import TYPE_CHECKING, Protocol
@@ -13,6 +14,8 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from rager import DenseEmbedding, SparseEmbedding
+
+logger = logging.getLogger(__name__)
 
 
 class Index[E, K](Protocol):
@@ -73,14 +76,17 @@ class DenseIndex:
     def _ensure_index(self, dimensions: int) -> faiss.IndexIDMap2:
         """Return the index, building it to match the first embedding's width."""
         if self.dimensions is None:
+            logger.debug("Inferred embedding dimension %d from first batch", dimensions)
             self.dimensions = dimensions
         if dimensions != self.dimensions:
             message = (
                 f"Embedding has {dimensions} dimensions, "
                 f"but the index expects {self.dimensions}."
             )
+            logger.error(message)
             raise ValueError(message)
         if self._index is None:
+            logger.info("Created dense FAISS index with %d dimensions", self.dimensions)
             self._index = faiss.IndexIDMap2(faiss.IndexFlatIP(self.dimensions))
         return self._index
 
@@ -105,14 +111,30 @@ class DenseIndex:
         ids = np.asarray(list(unique), dtype=np.int64)
         index.remove_ids(faiss.IDSelectorBatch(ids))
         index.add_with_ids(self._to_rows(list(unique.values())), ids)
+        logger.debug(
+            "Added %d embeddings (%d unique) to the dense index; total is now %d",
+            len(keys),
+            len(unique),
+            index.ntotal,
+        )
         return concresce.scatter(keys)
 
     async def _remove(self, key: int) -> None:
         """Remove an embedding from the index by its key."""
         keys = await concresce.collect(key)
-        if self._index is not None:
+        if self._index is None:
+            logger.warning(
+                "Ignoring removal of %d keys from an empty dense index", len(keys)
+            )
+        else:
             ids = np.asarray(keys, dtype=np.int64)
-            self._index.remove_ids(faiss.IDSelectorBatch(ids))
+            removed = self._index.remove_ids(faiss.IDSelectorBatch(ids))
+            logger.debug(
+                "Removed %d of %d keys from the dense index; total is now %d",
+                removed,
+                len(keys),
+                self._index.ntotal,
+            )
         return concresce.scatter([None] * len(keys))
 
     async def _similar_batch(
@@ -123,7 +145,16 @@ class DenseIndex:
         embeddings = [query for query, _ in collected]
         counts = [count for _, count in collected]
         if self._index is None:
+            logger.warning(
+                "Similarity search of %d queries on an empty dense index",
+                len(collected),
+            )
             return concresce.scatter([[] for _ in collected])
+        logger.debug(
+            "Searching the dense index of %d embeddings with %d queries",
+            self._index.ntotal,
+            len(collected),
+        )
         _, ids = self._index.search(self._to_rows(embeddings), max(counts))
         rankings = [
             [int(i) for i in row[:count] if i != -1]
@@ -190,13 +221,25 @@ class SparseIndex:
         embeddings = await concresce.collect(embedding)
         keys = [self._key(e) for e in embeddings]
         self._embeddings.update(zip(keys, embeddings, strict=True))
+        logger.debug(
+            "Added %d embeddings to the sparse index; total is now %d",
+            len(keys),
+            len(self._embeddings),
+        )
         return concresce.scatter(keys)
 
     async def _remove(self, key: int) -> None:
         """Remove an embedding from the index by its key."""
         keys = await concresce.collect(key)
+        removed = 0
         for k in keys:
-            self._embeddings.pop(k, None)
+            removed += self._embeddings.pop(k, None) is not None
+        logger.debug(
+            "Removed %d of %d keys from the sparse index; total is now %d",
+            removed,
+            len(keys),
+            len(self._embeddings),
+        )
         return concresce.scatter([None] * len(keys))
 
     async def _similar_batch(
@@ -204,5 +247,16 @@ class SparseIndex:
     ) -> list[int]:
         """Retrieve the most similar embedding keys to the given embedding."""
         collected = await concresce.collect((embedding, results))
+        if not self._embeddings:
+            logger.warning(
+                "Similarity search of %d queries on an empty sparse index",
+                len(collected),
+            )
+        else:
+            logger.debug(
+                "Searching the sparse index of %d embeddings with %d queries",
+                len(self._embeddings),
+                len(collected),
+            )
         rankings = [self._top_keys(query, count) for query, count in collected]
         return concresce.scatter(rankings)
