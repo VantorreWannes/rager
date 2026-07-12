@@ -2,7 +2,7 @@
 
 from rager.chunkers import Chunker
 from rager.embedders import Embedder
-from rager.fusers import Fuser
+from rager.fusers import BordaCountFuser, Fuser, ReciprocalRankFuser
 from rager.generators import Generator
 from rager.indexes import DenseIndex, Index, SparseIndex
 from rager.parsers import (
@@ -15,6 +15,7 @@ from rager.stores import MetadataStore, Store
 from rager.types import DenseEmbedding, Hash, Metadata, SparseEmbedding
 
 __all__ = [
+    "BordaCountFuser",
     "Chunker",
     "DenseEmbedding",
     "DenseIndex",
@@ -28,6 +29,7 @@ __all__ = [
     "MetadataStore",
     "Parser",
     "PdfFileParser",
+    "ReciprocalRankFuser",
     "Scorer",
     "SparseEmbedding",
     "SparseIndex",
