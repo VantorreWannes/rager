@@ -26,7 +26,11 @@ class Generator(Protocol):
 class TransformersGenerator:
     """Generator that prompts a local transformers text-generation model."""
 
-    def __init__(self, model_name: str, max_new_tokens: int = 512) -> None:
+    def __init__(
+        self,
+        model_name: str = "HuggingFaceTB/SmolLM2-135M-Instruct",
+        max_new_tokens: int = 512,
+    ) -> None:
         """Initialize the generator with a specific model."""
         self.model_name = model_name
         self.max_new_tokens = max_new_tokens
@@ -39,7 +43,7 @@ class TransformersGenerator:
     @cached_property
     def _generate(self) -> Callable[[str], Awaitable[str]]:
         """Coalesce concurrent calls into per-instance generation batches."""
-        return concresce.batch(window=timedelta(milliseconds=100))(self._generate_batch)
+        return concresce.batch(window=timedelta(milliseconds=1))(self._generate_batch)
 
     async def _generate_batch(self, query: str) -> str:
         """Generate an answer for each query in the collected batch."""
