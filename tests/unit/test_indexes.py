@@ -12,20 +12,48 @@ pytestmark = pytest.mark.unit
 
 
 @patch("rager.indexes.faiss")
-def test_dense_index_init(faiss: MagicMock) -> None:
-    """__init__() wraps a flat inner-product index in an id map."""
+def test_dense_index_init_defers_index_creation(faiss: MagicMock) -> None:
+    """__init__() records the dimension but builds no FAISS index yet."""
     # Arrange
     dimensions = 3
-    results = 5
 
     # Act
-    index = DenseIndex(dimensions, results=results)
+    index = DenseIndex(dimensions)
+
+    # Assert
+    faiss.IndexFlatIP.assert_not_called()
+    faiss.IndexIDMap2.assert_not_called()
+    assert index.dimensions == dimensions
+
+
+@patch("rager.indexes.faiss")
+@pytest.mark.asyncio
+async def test_dense_index_infers_dimensions_on_first_add(faiss: MagicMock) -> None:
+    """The first add() builds a FAISS index sized to the embedding width."""
+    # Arrange
+    dimensions = 3
+    index = DenseIndex()
+
+    # Act
+    await index.add([0.1, 0.2, 0.3])
 
     # Assert
     faiss.IndexFlatIP.assert_called_once_with(dimensions)
     faiss.IndexIDMap2.assert_called_once_with(faiss.IndexFlatIP.return_value)
     assert index.dimensions == dimensions
-    assert index.results == results
+
+
+@patch("rager.indexes.faiss")
+@pytest.mark.asyncio
+async def test_dense_index_rejects_mismatched_dimensions(faiss: MagicMock) -> None:
+    """add() rejects an embedding whose width differs from the fixed dimension."""
+    # Arrange
+    index = DenseIndex(3)
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="4 dimensions"):
+        await index.add([0.1, 0.2, 0.3, 0.4])
+    faiss.IndexIDMap2.assert_not_called()
 
 
 def test_dense_index_to_rows() -> None:
@@ -119,7 +147,10 @@ async def test_dense_index_remove(faiss: MagicMock) -> None:
     """remove() removes the entry matching the given key."""
     # Arrange
     index = DenseIndex(3)
+    await index.add([0.1, 0.2, 0.3])
     faiss_index = faiss.IndexIDMap2.return_value
+    faiss_index.remove_ids.reset_mock()
+    faiss.IDSelectorBatch.reset_mock()
 
     # Act
     await index.remove(42)
@@ -132,11 +163,29 @@ async def test_dense_index_remove(faiss: MagicMock) -> None:
 
 @patch("rager.indexes.faiss")
 @pytest.mark.asyncio
+async def test_dense_index_remove_on_empty_index_is_noop(faiss: MagicMock) -> None:
+    """remove() before any add touches no FAISS index."""
+    # Arrange
+    index = DenseIndex(3)
+
+    # Act
+    await index.remove(42)
+
+    # Assert
+    faiss.IndexIDMap2.assert_not_called()
+    faiss.IDSelectorBatch.assert_not_called()
+
+
+@patch("rager.indexes.faiss")
+@pytest.mark.asyncio
 async def test_dense_index_remove_batches_concurrent_calls(faiss: MagicMock) -> None:
     """Concurrent remove() calls coalesce into one FAISS call."""
     # Arrange
     index = DenseIndex(3)
+    await index.add([0.1, 0.2, 0.3])
     faiss_index = faiss.IndexIDMap2.return_value
+    faiss_index.remove_ids.reset_mock()
+    faiss.IDSelectorBatch.reset_mock()
 
     # Act
     await asyncio.gather(index.remove(1), index.remove(2))
@@ -150,10 +199,11 @@ async def test_dense_index_remove_batches_concurrent_calls(faiss: MagicMock) -> 
 @patch("rager.indexes.faiss")
 @pytest.mark.asyncio
 async def test_dense_index_similar(faiss: MagicMock) -> None:
-    """similar() searches with the results count and drops -1 padding ids."""
+    """similar() searches with the requested count and drops -1 padding ids."""
     # Arrange
     expected_results = 4
-    index = DenseIndex(3, results=expected_results)
+    index = DenseIndex(3)
+    await index.add([0.0, 0.0, 0.0])
     faiss_index = faiss.IndexIDMap2.return_value
     faiss_index.search.return_value = (
         np.asarray([[0.9, 0.5, -1.0, -1.0]], dtype=np.float32),
@@ -161,14 +211,28 @@ async def test_dense_index_similar(faiss: MagicMock) -> None:
     )
 
     # Act
-    result = await index.similar([0.1, 0.2, 0.3])
+    result = await index.similar([0.1, 0.2, 0.3], results=expected_results)
 
     # Assert
     query, results = faiss_index.search.call_args.args
     np.testing.assert_array_equal(query, DenseIndex._to_rows([[0.1, 0.2, 0.3]]))
     assert results == expected_results
     assert result == [7, 3]
-    assert faiss.IDSelectorBatch.call_count == 0
+
+
+@patch("rager.indexes.faiss")
+@pytest.mark.asyncio
+async def test_dense_index_similar_on_empty_index(faiss: MagicMock) -> None:
+    """similar() before any add returns no keys without searching."""
+    # Arrange
+    index = DenseIndex(3)
+
+    # Act
+    result = await index.similar([0.1, 0.2, 0.3])
+
+    # Assert
+    assert result == []
+    faiss.IndexIDMap2.return_value.search.assert_not_called()
 
 
 @patch("rager.indexes.faiss")
@@ -176,9 +240,10 @@ async def test_dense_index_similar(faiss: MagicMock) -> None:
 async def test_dense_index_similar_scatters_concurrent_queries(
     faiss: MagicMock,
 ) -> None:
-    """Concurrent similar() calls share one search, each getting its own row."""
+    """Concurrent similar() calls share one search, each trimmed to its own count."""
     # Arrange
-    index = DenseIndex(3, results=2)
+    index = DenseIndex(3)
+    await index.add([0.0, 0.0, 0.0])
     faiss_index = faiss.IndexIDMap2.return_value
     faiss_index.search.return_value = (
         np.asarray([[0.9, 0.5], [0.8, -1.0]], dtype=np.float32),
@@ -187,7 +252,8 @@ async def test_dense_index_similar_scatters_concurrent_queries(
 
     # Act
     first, second = await asyncio.gather(
-        index.similar([1.0, 0.0, 0.0]), index.similar([0.0, 1.0, 0.0])
+        index.similar([1.0, 0.0, 0.0], results=2),
+        index.similar([0.0, 1.0, 0.0], results=2),
     )
 
     # Assert
@@ -196,16 +262,42 @@ async def test_dense_index_similar_scatters_concurrent_queries(
     assert second == [5]
 
 
-def test_sparse_index_init() -> None:
-    """__init__() stores the results count."""
+@patch("rager.indexes.faiss")
+@pytest.mark.asyncio
+async def test_dense_index_similar_trims_each_query_to_its_own_count(
+    faiss: MagicMock,
+) -> None:
+    """A batched search uses the largest count, then trims per query."""
     # Arrange
-    results = 5
+    larger_count = 3
+    index = DenseIndex(3)
+    await index.add([0.0, 0.0, 0.0])
+    faiss_index = faiss.IndexIDMap2.return_value
+    faiss_index.search.return_value = (
+        np.asarray([[0.9, 0.5, 0.4], [0.8, 0.3, 0.2]], dtype=np.float32),
+        np.asarray([[7, 3, 1], [5, 8, 2]], dtype=np.int64),
+    )
 
     # Act
-    index = SparseIndex(results=results)
+    first, second = await asyncio.gather(
+        index.similar([1.0, 0.0, 0.0], results=1),
+        index.similar([0.0, 1.0, 0.0], results=larger_count),
+    )
 
     # Assert
-    assert index.results == results
+    _, results = faiss_index.search.call_args.args
+    assert results == larger_count
+    assert first == [7]
+    assert second == [5, 8, 2]
+
+
+def test_sparse_index_init() -> None:
+    """__init__() starts with no stored embeddings."""
+    # Act
+    index = SparseIndex()
+
+    # Assert
+    assert index._embeddings == {}
 
 
 def test_sparse_index_key_ignores_insertion_order() -> None:
@@ -271,14 +363,14 @@ async def test_sparse_index_similar_drops_non_matching_keys() -> None:
 
 @pytest.mark.asyncio
 async def test_sparse_index_similar_caps_results() -> None:
-    """similar() returns at most the configured number of results."""
+    """similar() returns at most the requested number of results."""
     # Arrange
-    index = SparseIndex(results=1)
+    index = SparseIndex()
     x_key = await index.add({1: 1.0})
     await index.add({1: 0.5})
 
     # Act & Assert
-    assert await index.similar({1: 1.0}) == [x_key]
+    assert await index.similar({1: 1.0}, results=1) == [x_key]
 
 
 @pytest.mark.asyncio
