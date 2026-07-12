@@ -11,8 +11,8 @@ from rager.parsers import (
     PdfFileParser,
 )
 from rager.scorers import Scorer
-from rager.stores import Store
-from rager.types import DenseEmbedding, Hash, SparseEmbedding
+from rager.stores import MetadataStore, Store
+from rager.types import DenseEmbedding, Hash, Metadata, SparseEmbedding
 
 __all__ = [
     "Chunker",
@@ -24,6 +24,8 @@ __all__ = [
     "Hash",
     "Index",
     "MarkdownFileParser",
+    "Metadata",
+    "MetadataStore",
     "Parser",
     "PdfFileParser",
     "Scorer",
