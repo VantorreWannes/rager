@@ -1,5 +1,7 @@
 """Caching based RAG primitives."""
 
+import logging
+
 from rager.chunkers import Chunker, SemanticChunker
 from rager.embedders import (
     Embedder,
@@ -19,6 +21,8 @@ from rager.parsers import (
 from rager.scorers import CrossEncoderScorer, Scorer
 from rager.stores import ChunkStore, MetadataStore, Store
 from rager.types import DenseEmbedding, Hash, Metadata, SparseEmbedding
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "BordaCountFuser",

@@ -1,5 +1,6 @@
 """Embedders for converting text chunks into vector representations."""
 
+import logging
 from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
@@ -16,6 +17,8 @@ if TYPE_CHECKING:
 
     from rager import DenseEmbedding
     from rager.types import SparseEmbedding
+
+logger = logging.getLogger(__name__)
 
 
 class Embedder[E](Protocol):
@@ -36,6 +39,7 @@ class SentenceTransformerDenseEmbedder:
     @cached_property
     def model(self) -> SentenceTransformer:
         """Load the SentenceTransformer model."""
+        logger.info("Loading SentenceTransformer model %r", self.model_name)
         return SentenceTransformer(self.model_name)
 
     @cached_property
@@ -46,6 +50,9 @@ class SentenceTransformerDenseEmbedder:
     async def _encode_batch(self, chunk: str) -> DenseEmbedding:
         """Convert a text chunk into a vector representation."""
         chunks = await concresce.collect(chunk)
+        logger.debug(
+            "Encoding batch of %d chunks with %r", len(chunks), self.model_name
+        )
         embeddings = self.model.encode(chunks, normalize_embeddings=True).tolist()
         return concresce.scatter(embeddings)
 
@@ -55,6 +62,7 @@ class SentenceTransformerDenseEmbedder:
         belljar.include(self.model_name)
         belljar.include(chunk)
         belljar.check()
+        logger.debug("Cache miss; embedding chunk of %d characters", len(chunk))
         return await self._encode(chunk)
 
 
@@ -68,6 +76,7 @@ class SpladeSparseEmbedder:
     @cached_property
     def model(self) -> SparseEncoder:
         """Load the SPLADE SparseEncoder model."""
+        logger.info("Loading SPLADE SparseEncoder model %r", self.model_name)
         return SparseEncoder(self.model_name)
 
     @staticmethod
@@ -103,6 +112,9 @@ class SpladeSparseEmbedder:
     async def _encode_batch(self, chunk: str) -> SparseEmbedding:
         """Convert a text chunk into a sparse vector representation."""
         chunks = await concresce.collect(chunk)
+        logger.debug(
+            "Encoding batch of %d chunks with %r", len(chunks), self.model_name
+        )
         coalesced = self.model.encode(chunks).coalesce()
         embeddings = self._coalesced_to_embeddings(coalesced, len(chunks))
         return concresce.scatter(embeddings)
@@ -113,4 +125,5 @@ class SpladeSparseEmbedder:
         belljar.include(self.model_name)
         belljar.include(chunk)
         belljar.check()
+        logger.debug("Cache miss; embedding chunk of %d characters", len(chunk))
         return await self._encode(chunk)
