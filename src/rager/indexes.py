@@ -1,9 +1,7 @@
 """Embedding Index protocol definitions."""
 
 import logging
-from datetime import timedelta
-from functools import cached_property
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 import blake3
 import concresce
@@ -11,8 +9,6 @@ import faiss
 import numpy as np
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
     from rager import DenseEmbedding, SparseEmbedding
 
 logger = logging.getLogger(__name__)
@@ -54,25 +50,6 @@ class DenseIndex:
         self.dimensions = dimensions
         self._index: faiss.IndexIDMap2 | None = None
 
-    @cached_property
-    def add(self) -> Callable[[DenseEmbedding], Awaitable[int]]:
-        """Add an embedding to the index and return its key."""
-        return concresce.batch(window=timedelta(milliseconds=1))(self._add)
-
-    @cached_property
-    def remove(self) -> Callable[[int], Awaitable[None]]:
-        """Remove an embedding from the index by its key."""
-        return concresce.batch(window=timedelta(milliseconds=1))(self._remove)
-
-    async def similar(self, embedding: DenseEmbedding, results: int = 100) -> list[int]:
-        """Retrieve the keys of the ``results`` most similar embeddings."""
-        return await self._similar(embedding, results)
-
-    @cached_property
-    def _similar(self) -> Callable[[DenseEmbedding, int], Awaitable[list[int]]]:
-        """Coalesce concurrent queries into one batched FAISS search."""
-        return concresce.batch(window=timedelta(milliseconds=1))(self._similar_batch)
-
     def _ensure_index(self, dimensions: int) -> faiss.IndexIDMap2:
         """Return the index, building it to match the first embedding's width."""
         if self.dimensions is None:
@@ -101,7 +78,8 @@ class DenseIndex:
         digest = blake3.blake3(row.tobytes()).digest()
         return int.from_bytes(digest[:8], "little", signed=True)
 
-    async def _add(self, embedding: DenseEmbedding) -> int:
+    @concresce.batch
+    async def add(self, embedding: DenseEmbedding) -> int:
         """Add an embedding to the index and return its key."""
         embeddings = await concresce.collect(embedding)
         rows = self._to_rows(embeddings)
@@ -117,9 +95,10 @@ class DenseIndex:
             len(unique),
             index.ntotal,
         )
-        return concresce.scatter(keys)
+        return cast("int", keys)
 
-    async def _remove(self, key: int) -> None:
+    @concresce.batch
+    async def remove(self, key: int) -> None:
         """Remove an embedding from the index by its key."""
         keys = await concresce.collect(key)
         if self._index is None:
@@ -135,12 +114,11 @@ class DenseIndex:
                 len(keys),
                 self._index.ntotal,
             )
-        return concresce.scatter([None] * len(keys))
+        return cast("None", [None] * len(keys))
 
-    async def _similar_batch(
-        self, embedding: DenseEmbedding, results: int
-    ) -> list[int]:
-        """Retrieve the most similar embedding keys to the given embedding."""
+    @concresce.batch
+    async def similar(self, embedding: DenseEmbedding, results: int = 100) -> list[int]:
+        """Retrieve the keys of the ``results`` most similar embeddings."""
         collected = await concresce.collect((embedding, results))
         embeddings = [query for query, _ in collected]
         counts = [count for _, count in collected]
@@ -149,7 +127,7 @@ class DenseIndex:
                 "Similarity search of %d queries on an empty dense index",
                 len(collected),
             )
-            return concresce.scatter([[] for _ in collected])
+            return cast("list[int]", [[] for _ in collected])
         logger.debug(
             "Searching the dense index of %d embeddings with %d queries",
             self._index.ntotal,
@@ -160,7 +138,7 @@ class DenseIndex:
             [int(i) for i in row[:count] if i != -1]
             for row, count in zip(ids, counts, strict=True)
         ]
-        return concresce.scatter(rankings)
+        return cast("list[int]", rankings)
 
 
 class SparseIndex:
@@ -169,27 +147,6 @@ class SparseIndex:
     def __init__(self) -> None:
         """Initialize the sparse index."""
         self._embeddings: dict[int, SparseEmbedding] = {}
-
-    @cached_property
-    def add(self) -> Callable[[SparseEmbedding], Awaitable[int]]:
-        """Add an embedding to the index and return its key."""
-        return concresce.batch(window=timedelta(milliseconds=1))(self._add)
-
-    @cached_property
-    def remove(self) -> Callable[[int], Awaitable[None]]:
-        """Remove an embedding from the index by its key."""
-        return concresce.batch(window=timedelta(milliseconds=1))(self._remove)
-
-    async def similar(
-        self, embedding: SparseEmbedding, results: int = 100
-    ) -> list[int]:
-        """Retrieve the keys of the ``results`` most similar embeddings."""
-        return await self._similar(embedding, results)
-
-    @cached_property
-    def _similar(self) -> Callable[[SparseEmbedding, int], Awaitable[list[int]]]:
-        """Coalesce concurrent queries into one batched ranking pass."""
-        return concresce.batch(window=timedelta(milliseconds=1))(self._similar_batch)
 
     @staticmethod
     def _key(embedding: SparseEmbedding) -> int:
@@ -216,7 +173,8 @@ class SparseIndex:
         ranked = sorted(scores, key=lambda key: scores[key], reverse=True)
         return [key for key in ranked[:results] if scores[key] > 0]
 
-    async def _add(self, embedding: SparseEmbedding) -> int:
+    @concresce.batch
+    async def add(self, embedding: SparseEmbedding) -> int:
         """Add an embedding to the index and return its key."""
         embeddings = await concresce.collect(embedding)
         keys = [self._key(e) for e in embeddings]
@@ -226,9 +184,10 @@ class SparseIndex:
             len(keys),
             len(self._embeddings),
         )
-        return concresce.scatter(keys)
+        return cast("int", keys)
 
-    async def _remove(self, key: int) -> None:
+    @concresce.batch
+    async def remove(self, key: int) -> None:
         """Remove an embedding from the index by its key."""
         keys = await concresce.collect(key)
         removed = 0
@@ -240,12 +199,13 @@ class SparseIndex:
             len(keys),
             len(self._embeddings),
         )
-        return concresce.scatter([None] * len(keys))
+        return cast("None", [None] * len(keys))
 
-    async def _similar_batch(
-        self, embedding: SparseEmbedding, results: int
+    @concresce.batch
+    async def similar(
+        self, embedding: SparseEmbedding, results: int = 100
     ) -> list[int]:
-        """Retrieve the most similar embedding keys to the given embedding."""
+        """Retrieve the keys of the ``results`` most similar embeddings."""
         collected = await concresce.collect((embedding, results))
         if not self._embeddings:
             logger.warning(
@@ -259,4 +219,4 @@ class SparseIndex:
                 len(collected),
             )
         rankings = [self._top_keys(query, count) for query, count in collected]
-        return concresce.scatter(rankings)
+        return cast("list[int]", rankings)

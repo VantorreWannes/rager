@@ -1,17 +1,16 @@
 """Embedders for converting text chunks into vector representations."""
 
 import logging
-from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 import belljar
 import concresce
 from sentence_transformers import SentenceTransformer, SparseEncoder
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterable, Iterator
+    from collections.abc import Iterable, Iterator
 
     from torch import Tensor
 
@@ -42,19 +41,15 @@ class SentenceTransformerDenseEmbedder:
         logger.info("Loading SentenceTransformer model %r", self.model_name)
         return SentenceTransformer(self.model_name)
 
-    @cached_property
-    def _encode(self) -> Callable[[str], Awaitable[DenseEmbedding]]:
-        """Coalesce concurrent calls into per-instance encoding batches."""
-        return concresce.batch(window=timedelta(milliseconds=1))(self._encode_batch)
-
-    async def _encode_batch(self, chunk: str) -> DenseEmbedding:
+    @concresce.batch
+    async def _encode(self, chunk: str) -> DenseEmbedding:
         """Convert a text chunk into a vector representation."""
         chunks = await concresce.collect(chunk)
         logger.debug(
             "Encoding batch of %d chunks with %r", len(chunks), self.model_name
         )
         embeddings = self.model.encode(chunks, normalize_embeddings=True).tolist()
-        return concresce.scatter(embeddings)
+        return cast("DenseEmbedding", embeddings)
 
     @belljar.store(Path(".jar/embedders"))
     async def embed(self, chunk: str) -> DenseEmbedding:
@@ -104,12 +99,8 @@ class SpladeSparseEmbedder:
         """Split a coalesced sparse tensor into one weight map per input row."""
         return cls._group_by_row(cls._decode_entries(coalesced), count)
 
-    @cached_property
-    def _encode(self) -> Callable[[str], Awaitable[SparseEmbedding]]:
-        """Coalesce concurrent calls into per-instance encoding batches."""
-        return concresce.batch(window=timedelta(milliseconds=1))(self._encode_batch)
-
-    async def _encode_batch(self, chunk: str) -> SparseEmbedding:
+    @concresce.batch
+    async def _encode(self, chunk: str) -> SparseEmbedding:
         """Convert a text chunk into a sparse vector representation."""
         chunks = await concresce.collect(chunk)
         logger.debug(
@@ -117,7 +108,7 @@ class SpladeSparseEmbedder:
         )
         coalesced = self.model.encode(chunks).coalesce()
         embeddings = self._coalesced_to_embeddings(coalesced, len(chunks))
-        return concresce.scatter(embeddings)
+        return cast("SparseEmbedding", embeddings)
 
     @belljar.store(Path(".jar/embedders"))
     async def embed(self, chunk: str) -> SparseEmbedding:
