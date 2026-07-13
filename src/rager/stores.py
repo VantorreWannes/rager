@@ -22,6 +22,10 @@ class Store[K: Hashable, V: Hashable](Protocol):
         """Remove a value by its key."""
         ...
 
+    def keys(self) -> list[K]:
+        """Return all keys in the store."""
+        ...
+
 
 class MemoryStore[K: Hashable, V: Hashable]:
     """In-memory store mapping index keys to values."""
@@ -46,3 +50,7 @@ class MemoryStore[K: Hashable, V: Hashable]:
         """Remove a value by its key."""
         logger.debug("Removing value for key %r", key)
         self._map.pop(key, None)
+
+    def keys(self) -> list[K]:
+        """Return all keys in the store."""
+        return list(self._map.keys())

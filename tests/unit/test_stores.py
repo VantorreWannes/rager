@@ -34,6 +34,19 @@ def test_memory_store_add_and_get() -> None:
     assert store.get(1) == "a chunk"
 
 
+def test_memory_store_keys() -> None:
+    """keys() returns the keys stored."""
+    # Arrange
+    store: MemoryStore[int, str] = MemoryStore()
+
+    # Act
+    store.add(1, "a chunk")
+    store.add(2, "another chunk")
+
+    # Assert
+    assert store.keys() == [1, 2]
+
+
 def test_memory_store_get_of_absent_key_returns_none() -> None:
     """get() returns None for a key that was never added."""
     # Arrange
