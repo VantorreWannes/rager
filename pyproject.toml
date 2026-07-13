@@ -17,7 +17,8 @@ dependencies = [
     "sentence-transformers>=5.6.0",
     "tokenizers>=0.22.2",
     "transformers>=5.13.1",
-    "unstructured[md,pdf]>=0.24.0",
+    "unstructured-inference>=1.6.13",
+    "unstructured[csv,md,pdf]>=0.24.0",
 ]
 
 [build-system]
@@ -30,6 +31,7 @@ filterwarnings = [
 ]
 addopts = "--cov=rager --cov-report=html --cov-report=term-missing"
 markers = [
+    "smoke: instant sanity checks that the package imports and its model-free primitives work, with nothing mocked and no model downloads (tests/smoke)",
     "unit: fast, isolated test of a single component with every external dependency mocked (tests/unit)",
     "integration: slower tests requiring external dependencies (tests/integration)",
     "application: end-to-end user journeys composing multiple primitives with real models (tests/application)",
@@ -107,6 +109,9 @@ dev = [
 ]
 
 [tool.uv]
+override-dependencies = [
+    "python-magic; sys_platform != 'win32'",
+]
 conflicts = [
   [
     { extra = "cpu" },

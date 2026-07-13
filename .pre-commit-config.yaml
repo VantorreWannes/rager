@@ -52,3 +52,10 @@ repos:
         stages: [pre-push]
         types: [python]
         pass_filenames: false
+      - id: smoke-tests
+        name: Run smoke tests
+        entry: uv run pytest -m smoke
+        language: system
+        stages: [pre-push]
+        types: [python]
+        pass_filenames: false
