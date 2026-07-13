@@ -36,7 +36,7 @@ async def test_dense_rag_retrieves_and_answers_from_context() -> None:
         "HuggingFaceTB/SmolLM2-135M-Instruct", max_new_tokens=32
     )
     for document in DOCUMENTS:
-        for chunk in chunker.chunk(document):
+        for chunk in chunker.chunks(document):
             key = await index.add(await embedder.embed(chunk))
             chunks.add(key, chunk)
 

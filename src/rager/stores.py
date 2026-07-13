@@ -8,7 +8,7 @@ from rager.types import DenseEmbedding, Metadata, SparseEmbedding
 logger = logging.getLogger(__name__)
 
 
-class Store[V, K](Protocol):
+class Store[K, V](Protocol):
     """Protocol for a key-value store mapping keys of type K to values of type V."""
 
     def add(self, key: K, value: V) -> None:

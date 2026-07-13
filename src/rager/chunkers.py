@@ -58,7 +58,7 @@ class SemanticChunker:
         )
 
     @belljar.store(Path(".jar/chunkers"))
-    def chunk(self, unit: str) -> list[str]:
+    def chunks(self, unit: str) -> list[str]:
         """Split a unit into semantically meaningful chunks."""
         belljar.include(self.model_name)
         belljar.include(self.chunk_size)
