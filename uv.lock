@@ -1773,7 +1773,7 @@ wheels = [
 
 [[package]]
 name = "rager"
-version = "0.1.3"
+version = "0.1.6"
 source = { editable = "." }
 dependencies = [
     { name = "belljar" },
