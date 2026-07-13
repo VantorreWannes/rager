@@ -290,11 +290,11 @@ wheels = [
 
 [[package]]
 name = "concresce"
-version = "6.0.0"
+version = "5.1.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e6/ee/35ad4eab9cc84e6acc7fe30cbb06fdb2bc7decdb91fd93a07eea47251c32/concresce-6.0.0.tar.gz", hash = "sha256:a887de333cab00b2261264b016898dc1b13e72825827ee5cea8d7759aadcd7c1", size = 4893, upload-time = "2026-07-12T08:30:37.217Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cc/eb/4262fb5a9ed12b7087fed8056ecba44a28a2d40d0fd36bede301d5015af6/concresce-5.1.0.tar.gz", hash = "sha256:793de1c833fa9c8243c75eeffb17052dcf400cdf57cf84c6d005df76a9266211", size = 4702, upload-time = "2026-07-12T08:14:11.986Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fa/55/fe4b2563f9e32d5c43d52b33b7452bf78e8b45741bd9082b8a56f9e206cb/concresce-6.0.0-py3-none-any.whl", hash = "sha256:1a222ade603af2918c765c6819f60b98fea1083bcba2967cf63f90d722992a16", size = 5695, upload-time = "2026-07-12T08:30:34.694Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/49/7a9e09b784a84f48a9ad1361caa4001d0d5a49f62c0899bf6ab9e9d2ddd9/concresce-5.1.0-py3-none-any.whl", hash = "sha256:5d9e09bdfb0a4ad30b639416476455c64af2bf4204a62b2344a5210ec54c7a82", size = 5486, upload-time = "2026-07-12T08:14:09.716Z" },
 ]
 
 [[package]]
@@ -1773,7 +1773,7 @@ wheels = [
 
 [[package]]
 name = "rager"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "belljar" },
