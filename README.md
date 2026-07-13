@@ -2,6 +2,12 @@
 
 Caching based RAG primitives — composable building blocks for retrieval-augmented generation with caching baked in.
 
+## Install
+
+```
+uv add rager
+```
+
 ## Getting started
 
 ```
