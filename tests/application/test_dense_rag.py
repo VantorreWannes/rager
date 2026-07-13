@@ -38,7 +38,7 @@ async def test_dense_rag_retrieves_and_answers_from_context() -> None:
     for document in DOCUMENTS:
         for chunk in chunker.chunks(document):
             key = await index.add(await embedder.embed(chunk))
-            chunks.add(key, chunk)
+            chunks.set(key, chunk)
 
     # Act
     query = "Why do cats purr?"

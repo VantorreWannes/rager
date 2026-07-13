@@ -34,7 +34,7 @@ class MemoryStore[K: Hashable, V: Hashable]:
         """Initialize the store with no values."""
         self._map: dict[K, V] = {}
 
-    def add(self, key: K, value: V) -> None:
+    def set(self, key: K, value: V) -> None:
         """Store a value with the given key."""
         logger.debug("Storing value for key %r", key)
         self._map[key] = value

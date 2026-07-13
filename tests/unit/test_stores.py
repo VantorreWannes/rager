@@ -28,7 +28,7 @@ def test_memory_store_add_and_get() -> None:
     store: MemoryStore[int, str] = MemoryStore()
 
     # Act
-    store.add(1, "a chunk")
+    store.set(1, "a chunk")
 
     # Assert
     assert store.get(1) == "a chunk"
@@ -40,8 +40,8 @@ def test_memory_store_keys() -> None:
     store: MemoryStore[int, str] = MemoryStore()
 
     # Act
-    store.add(1, "a chunk")
-    store.add(2, "another chunk")
+    store.set(1, "a chunk")
+    store.set(2, "another chunk")
 
     # Assert
     assert store.keys() == [1, 2]
@@ -57,13 +57,13 @@ def test_memory_store_get_of_absent_key_returns_none() -> None:
 
 
 def test_memory_store_add_overwrites_existing_key() -> None:
-    """add() replaces the value stored under an existing key."""
+    """set() replaces the value stored under an existing key."""
     # Arrange
     store: MemoryStore[int, str] = MemoryStore()
 
     # Act
-    store.add(1, "old")
-    store.add(1, "new")
+    store.set(1, "old")
+    store.set(1, "new")
 
     # Assert
     assert store.get(1) == "new"
@@ -73,7 +73,7 @@ def test_memory_store_remove() -> None:
     """remove() deletes the value stored under the key."""
     # Arrange
     store: MemoryStore[int, str] = MemoryStore()
-    store.add(1, "a chunk")
+    store.set(1, "a chunk")
 
     # Act
     store.remove(1)
@@ -86,7 +86,7 @@ def test_memory_store_remove_of_absent_key_is_noop() -> None:
     """remove() of a key that was never added leaves the store unchanged."""
     # Arrange
     store: MemoryStore[int, str] = MemoryStore()
-    store.add(1, "a chunk")
+    store.set(1, "a chunk")
 
     # Act
     store.remove(2)
@@ -101,7 +101,7 @@ def test_memory_store_with_embedding_values() -> None:
     store: MemoryStore[int, tuple[float, ...]] = MemoryStore()
 
     # Act
-    store.add(1, (0.1, 0.2))
+    store.set(1, (0.1, 0.2))
 
     # Assert
     assert store.get(1) == (0.1, 0.2)
@@ -115,7 +115,7 @@ def test_memory_store_with_hash_keys_and_metadata_values() -> None:
     metadata = ChunkMetadata(chunk="a chunk", file_id=key)
 
     # Act
-    store.add(key, metadata)
+    store.set(key, metadata)
 
     # Assert
     assert store.get(key) is metadata
