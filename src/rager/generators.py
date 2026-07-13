@@ -1,18 +1,15 @@
 """Generators for producing answers to prompts."""
 
 import logging
-from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 import belljar
 import concresce
 from transformers import pipeline
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
     from transformers import TextGenerationPipeline
 
 logger = logging.getLogger(__name__)
@@ -44,12 +41,8 @@ class TransformersGenerator:
         logger.info("Loading text-generation pipeline for model %r", self.model_name)
         return pipeline("text-generation", model=self.model_name)
 
-    @cached_property
-    def _generate(self) -> Callable[[str], Awaitable[str]]:
-        """Coalesce concurrent calls into per-instance generation batches."""
-        return concresce.batch(window=timedelta(milliseconds=1))(self._generate_batch)
-
-    async def _generate_batch(self, query: str) -> str:
+    @concresce.batch
+    async def _generate(self, query: str) -> str:
         """Generate an answer for each query in the collected batch."""
         queries = await concresce.collect(query)
         logger.debug(
@@ -65,7 +58,7 @@ class TransformersGenerator:
             do_sample=False,
         )
         answers = [output[0]["generated_text"][-1]["content"] for output in outputs]
-        return concresce.scatter(answers)
+        return cast("str", answers)
 
     @belljar.store(Path(".jar/generators"))
     async def prompt(self, query: str) -> str:
