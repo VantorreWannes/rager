@@ -15,4 +15,4 @@ uv run pytest
 uv run prek install
 ```
 
-Add an `--extra` to pin the default device: `rocm` (AMD), `cu130` (NVIDIA), or `cpu`. With `cpu`, torch supplies automatic fallback. For example: `uv run --extra cpu pytest`.
+`uv add rager` pulls the CPU torch build from PyPI. For GPU (CUDA/ROCm) torch, add the matching [PyTorch index](https://pytorch.org/get-started/locally/) to your own project and install torch from it — those builds aren't on PyPI.

@@ -1,6 +1,6 @@
 [project]
 name = "rager"
-version = "0.1.0"
+version = "0.1.1"
 description = "Caching based RAG primitives"
 readme = "README.md"
 authors = [
@@ -72,18 +72,8 @@ ignore = ["D203", "D213", "COM812", "ISC001"]
 all = "error"
 
 [[tool.uv.index]]
-name = "pytorch-rocm"
-url = "https://download.pytorch.org/whl/rocm7.2"
-explicit = true
-
-[[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-[[tool.uv.index]]
-name = "pytorch-cu130"
-url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
 [project.optional-dependencies]
@@ -91,33 +81,13 @@ cpu = [
   "torch>=2.13.0",
   "torchvision>=0.28.0",
 ]
-cu130 = [
-  "torch>=2.13.0",
-  "torchvision>=0.28.0",
-]
-rocm = [
-  "torch>=2.13.0",
-  "torchvision>=0.28.0",
-  "triton>=3.7.1",
-  "triton-rocm>=2.13.0",
-]
 
 [tool.uv.sources]
 torch = [
   { index = "pytorch-cpu", extra = "cpu" },
-  { index = "pytorch-cu130", extra = "cu130" },
-  { index = "pytorch-rocm", extra = "rocm" },
 ]
 torchvision = [
   { index = "pytorch-cpu", extra = "cpu" },
-  { index = "pytorch-cu130", extra = "cu130" },
-  { index = "pytorch-rocm", extra = "rocm" },
-]
-triton = [
-  { index = "pytorch-rocm", extra = "rocm" },
-]
-triton-rocm = [
-  { index = "pytorch-rocm", extra = "rocm" },
 ]
 
 [dependency-groups]
@@ -134,11 +104,4 @@ dev = [
 [tool.uv]
 override-dependencies = [
     "python-magic; sys_platform != 'win32'",
-]
-conflicts = [
-  [
-    { extra = "cpu" },
-    { extra = "cu130" },
-    { extra = "rocm" },
-  ],
 ]
