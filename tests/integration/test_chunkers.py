@@ -12,5 +12,5 @@ def test_semantic_chunker_chunks() -> None:
     chunker = SemanticChunker("gpt-3.5-turbo", 1000, 0)
     text = "This is a test document. It has multiple sentences to be split into chunks."
 
-    result = chunker.chunk(text)
+    result = chunker.chunks(text)
     assert len(result) == 1

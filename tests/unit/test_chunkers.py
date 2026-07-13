@@ -47,7 +47,7 @@ def test_semantic_chunker_chunks(
     ]
 
     # Act
-    _ = chunker.chunk(text)
+    _ = chunker.chunks(text)
 
     # Assert
     model.chunks.assert_called_once_with(text)

@@ -49,7 +49,7 @@ async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
         "HuggingFaceTB/SmolLM2-135M-Instruct", max_new_tokens=32
     )
     for document in DOCUMENTS:
-        for chunk in chunker.chunk(document):
+        for chunk in chunker.chunks(document):
             dense_key, sparse_key = await asyncio.gather(
                 dense_index.add(await dense_embedder.embed(chunk)),
                 sparse_index.add(await sparse_embedder.embed(chunk)),
