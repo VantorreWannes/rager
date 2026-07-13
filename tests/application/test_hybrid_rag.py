@@ -21,7 +21,7 @@ from rager.fusers import ReciprocalRankFuser
 from rager.generators import TransformersGenerator
 from rager.indexes import DenseIndex, SparseIndex
 from rager.scorers import CrossEncoderScorer
-from rager.stores import ChunkStore
+from rager.stores import MemoryStore
 
 pytestmark = pytest.mark.application
 
@@ -42,7 +42,7 @@ async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
     sparse_embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
     dense_index = DenseIndex(384)
     sparse_index = SparseIndex()
-    chunks = ChunkStore()
+    chunks: MemoryStore[int, str] = MemoryStore()
     fuser: ReciprocalRankFuser[int] = ReciprocalRankFuser()
     scorer = CrossEncoderScorer("cross-encoder/ms-marco-MiniLM-L6-v2")
     generator = TransformersGenerator(

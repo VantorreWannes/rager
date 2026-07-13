@@ -13,7 +13,7 @@ from rager.chunkers import SemanticChunker
 from rager.embedders import SentenceTransformerDenseEmbedder
 from rager.generators import TransformersGenerator
 from rager.indexes import DenseIndex
-from rager.stores import ChunkStore
+from rager.stores import MemoryStore
 
 pytestmark = pytest.mark.application
 
@@ -31,7 +31,7 @@ async def test_dense_rag_retrieves_and_answers_from_context() -> None:
     chunker = SemanticChunker()
     embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
     index = DenseIndex(384)
-    chunks = ChunkStore()
+    chunks: MemoryStore[int, str] = MemoryStore()
     generator = TransformersGenerator(
         "HuggingFaceTB/SmolLM2-135M-Instruct", max_new_tokens=32
     )

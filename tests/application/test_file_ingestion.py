@@ -15,7 +15,7 @@ from rager.chunkers import SemanticChunker
 from rager.embedders import SentenceTransformerDenseEmbedder
 from rager.indexes import DenseIndex
 from rager.parsers import CsvFileParser, MarkdownFileParser, PdfFileParser
-from rager.stores import ChunkStore
+from rager.stores import MemoryStore
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -44,7 +44,7 @@ async def test_file_ingestion_round_trips(
     file: Path = request.getfixturevalue(file_fixture)
     embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
     index = DenseIndex(384)
-    chunks = ChunkStore()
+    chunks: MemoryStore[int, str] = MemoryStore()
     ingested: list[str] = []
     for unit in parser().units(file):
         for chunk in SemanticChunker().chunks(unit):

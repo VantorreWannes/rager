@@ -7,32 +7,27 @@ import blake3
 import pytest
 
 from rager.indexes import DenseIndex, SparseIndex
-from rager.stores import (
-    ChunkStore,
-    DenseEmbeddingStore,
-    MetadataStore,
-    SparseEmbeddingStore,
-)
+from rager.stores import MemoryStore
 
 if TYPE_CHECKING:
-    from rager.types import Hash
+    from rager.types import DenseEmbedding, Hash, SparseEmbedding
 
 pytestmark = pytest.mark.integration
 
 
 @dataclass(frozen=True)
 class ChunkMetadata:
-    """Sample metadata satisfying the Metadata protocol."""
+    """Sample metadata stored as a value."""
 
     chunk: str
     file_id: Hash
 
 
 @pytest.mark.asyncio
-async def test_dense_embedding_store_resolves_dense_index_keys() -> None:
+async def test_memory_store_resolves_dense_index_keys_to_embeddings() -> None:
     """Keys returned by a dense index resolve back to stored embeddings."""
     index = DenseIndex(3)
-    store = DenseEmbeddingStore()
+    store: MemoryStore[int, DenseEmbedding] = MemoryStore()
     embedding = [1.0, 0.0, 0.0]
     store.add(await index.add(embedding), embedding)
 
@@ -42,10 +37,10 @@ async def test_dense_embedding_store_resolves_dense_index_keys() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sparse_embedding_store_resolves_sparse_index_keys() -> None:
+async def test_memory_store_resolves_sparse_index_keys_to_embeddings() -> None:
     """Keys returned by a sparse index resolve back to stored embeddings."""
     index = SparseIndex()
-    store = SparseEmbeddingStore()
+    store: MemoryStore[int, SparseEmbedding] = MemoryStore()
     embedding = {1: 1.0, 2: 0.5}
     store.add(await index.add(embedding), embedding)
 
@@ -55,10 +50,10 @@ async def test_sparse_embedding_store_resolves_sparse_index_keys() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chunk_store_resolves_dense_index_keys() -> None:
+async def test_memory_store_resolves_dense_index_keys_to_chunks() -> None:
     """Keys returned by a dense index resolve back to stored chunk text."""
     index = DenseIndex(3)
-    store = ChunkStore()
+    store: MemoryStore[int, str] = MemoryStore()
     store.add(await index.add([1.0, 0.0, 0.0]), "a chunk")
 
     (key,) = await index.similar([0.9, 0.1, 0.0])
@@ -67,10 +62,10 @@ async def test_chunk_store_resolves_dense_index_keys() -> None:
 
 
 @pytest.mark.asyncio
-async def test_metadata_store_resolves_dense_index_keys() -> None:
+async def test_memory_store_resolves_dense_index_keys_to_metadata() -> None:
     """Keys returned by a dense index resolve back to stored metadata."""
     index = DenseIndex(3)
-    store: MetadataStore[ChunkMetadata] = MetadataStore()
+    store: MemoryStore[int, ChunkMetadata] = MemoryStore()
     metadata = ChunkMetadata(chunk="a chunk", file_id=blake3.blake3(b"a file"))
     store.add(await index.add([1.0, 0.0, 0.0]), metadata)
 

@@ -19,14 +19,13 @@ from rager.parsers import (
     UnstructuredFileParser,
 )
 from rager.scorers import CrossEncoderScorer, Scorer
-from rager.stores import ChunkStore, MetadataStore, Store
-from rager.types import DenseEmbedding, Hash, Metadata, SparseEmbedding
+from rager.stores import MemoryStore, Store
+from rager.types import DenseEmbedding, Hash, SparseEmbedding
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "BordaCountFuser",
-    "ChunkStore",
     "Chunker",
     "CrossEncoderScorer",
     "CsvFileParser",
@@ -38,8 +37,7 @@ __all__ = [
     "Hash",
     "Index",
     "MarkdownFileParser",
-    "Metadata",
-    "MetadataStore",
+    "MemoryStore",
     "Parser",
     "PdfFileParser",
     "ReciprocalRankFuser",

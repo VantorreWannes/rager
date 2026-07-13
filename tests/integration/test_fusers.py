@@ -8,7 +8,7 @@ import pytest
 
 from rager.fusers import ReciprocalRankFuser
 from rager.indexes import DenseIndex, SparseIndex
-from rager.stores import MetadataStore
+from rager.stores import MemoryStore
 
 if TYPE_CHECKING:
     from rager.types import Hash
@@ -24,7 +24,7 @@ class ChunkMetadata:
     file_id: Hash
 
 
-def _chunks(store: MetadataStore[ChunkMetadata], keys: list[int]) -> list[str]:
+def _chunks(store: MemoryStore[int, ChunkMetadata], keys: list[int]) -> list[str]:
     """Resolve index keys to their chunk texts."""
     return [metadata.chunk for key in keys if (metadata := store.get(key)) is not None]
 
@@ -34,7 +34,7 @@ async def test_reciprocal_rank_fuser_fuses_dense_and_sparse_retrieval() -> None:
     """Chunks retrieved from dense and sparse indexes fuse into one ranking."""
     dense_index = DenseIndex(3)
     sparse_index = SparseIndex()
-    store: MetadataStore[ChunkMetadata] = MetadataStore()
+    store: MemoryStore[int, ChunkMetadata] = MemoryStore()
     file_id = blake3.blake3(b"a file")
     embeddings = {
         "apple": ([1.0, 0.0, 0.0], {1: 1.0}),
