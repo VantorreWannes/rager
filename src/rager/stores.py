@@ -18,7 +18,7 @@ class Store[K: Hashable, V: Hashable](Protocol):
         """Retrieve a value by its key."""
         ...
 
-    def remove(self, key: K) -> V:
+    def remove(self, key: K) -> None:
         """Remove a value by its key."""
         ...
 
