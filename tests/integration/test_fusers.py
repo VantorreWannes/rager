@@ -42,8 +42,8 @@ async def test_reciprocal_rank_fuser_fuses_dense_and_sparse_retrieval() -> None:
     }
     for chunk, (dense, sparse) in embeddings.items():
         metadata = ChunkMetadata(chunk=chunk, file_id=file_id)
-        store.add(await dense_index.add(dense), metadata)
-        store.add(await sparse_index.add(sparse), metadata)
+        store.set(await dense_index.add(dense), metadata)
+        store.set(await sparse_index.add(sparse), metadata)
     fuser: ReciprocalRankFuser[str] = ReciprocalRankFuser()
 
     dense_keys = await dense_index.similar([0.9, 0.1, 0.0])

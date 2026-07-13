@@ -29,7 +29,7 @@ async def test_memory_store_resolves_dense_index_keys_to_embeddings() -> None:
     index = DenseIndex(3)
     store: MemoryStore[int, DenseEmbedding] = MemoryStore()
     embedding = [1.0, 0.0, 0.0]
-    store.add(await index.add(embedding), embedding)
+    store.set(await index.add(embedding), embedding)
 
     (key,) = await index.similar([0.9, 0.1, 0.0])
 
@@ -42,7 +42,7 @@ async def test_memory_store_resolves_sparse_index_keys_to_embeddings() -> None:
     index = SparseIndex()
     store: MemoryStore[int, SparseEmbedding] = MemoryStore()
     embedding = {1: 1.0, 2: 0.5}
-    store.add(await index.add(embedding), embedding)
+    store.set(await index.add(embedding), embedding)
 
     (key,) = await index.similar({1: 0.5})
 
@@ -54,7 +54,7 @@ async def test_memory_store_resolves_dense_index_keys_to_chunks() -> None:
     """Keys returned by a dense index resolve back to stored chunk text."""
     index = DenseIndex(3)
     store: MemoryStore[int, str] = MemoryStore()
-    store.add(await index.add([1.0, 0.0, 0.0]), "a chunk")
+    store.set(await index.add([1.0, 0.0, 0.0]), "a chunk")
 
     (key,) = await index.similar([0.9, 0.1, 0.0])
 
@@ -67,7 +67,7 @@ async def test_memory_store_resolves_dense_index_keys_to_metadata() -> None:
     index = DenseIndex(3)
     store: MemoryStore[int, ChunkMetadata] = MemoryStore()
     metadata = ChunkMetadata(chunk="a chunk", file_id=blake3.blake3(b"a file"))
-    store.add(await index.add([1.0, 0.0, 0.0]), metadata)
+    store.set(await index.add([1.0, 0.0, 0.0]), metadata)
 
     (key,) = await index.similar([0.9, 0.1, 0.0])
 

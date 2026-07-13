@@ -30,7 +30,7 @@ async def test_removed_document_drops_out_of_retrieval() -> None:
     keys: dict[str, int] = {}
     for document in DOCUMENTS:
         key = await index.add(await embedder.embed(document))
-        chunks.add(key, document)
+        chunks.set(key, document)
         keys[document] = key
 
     # Act

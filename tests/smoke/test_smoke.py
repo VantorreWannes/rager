@@ -28,8 +28,8 @@ async def test_dense_retrieval_round_trip() -> None:
     index = DenseIndex(3)
     chunks: MemoryStore[int, str] = MemoryStore()
     key = await index.add([1.0, 0.0, 0.0])
-    chunks.add(key, "cats")
-    chunks.add(await index.add([0.0, 1.0, 0.0]), "stocks")
+    chunks.set(key, "cats")
+    chunks.set(await index.add([0.0, 1.0, 0.0]), "stocks")
 
     # Act
     (nearest,) = await index.similar([0.9, 0.1, 0.0], results=1)

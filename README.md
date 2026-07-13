@@ -32,7 +32,7 @@ for document in documents:
     for chunk in chunker.chunk(document):
        embedding = await embedder.embed(chunk)
        key = await index.add(embedding)
-       chunks.add(key, chunk)
+       chunks.set(key, chunk)
 
 query = "Why do cats purr?"
 (key,) = await index.similar(await embedder.embed(query), results=1)
@@ -86,7 +86,7 @@ Every stage is a `Protocol` with concrete implementations. `async` methods batch
 
 ### Stores — map index keys back to data
 
-- **`Store[V, K]`** — protocol: `add(key, value)`, `get(key) -> value | None`, `remove(key)`.
+- **`Store[V, K]`** — protocol: `set(key, value)`, `get(key) -> value | None`, `remove(key)`.
 - **`ChunkStore`** — in-memory map from key to chunk text, resolving a search hit to its source.
 - **`MetadataStore[M: Metadata]`** — in-memory map from key to per-chunk metadata.
 

@@ -54,8 +54,8 @@ async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
                 dense_index.add(await dense_embedder.embed(chunk)),
                 sparse_index.add(await sparse_embedder.embed(chunk)),
             )
-            chunks.add(dense_key, chunk)
-            chunks.add(sparse_key, chunk)
+            chunks.set(dense_key, chunk)
+            chunks.set(sparse_key, chunk)
 
     # Act
     query = "Why do cats purr?"
