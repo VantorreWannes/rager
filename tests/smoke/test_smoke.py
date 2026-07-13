@@ -10,7 +10,7 @@ import pytest
 import rager
 from rager.fusers import BordaCountFuser, ReciprocalRankFuser
 from rager.indexes import DenseIndex, SparseIndex
-from rager.stores import ChunkStore
+from rager.stores import MemoryStore
 
 pytestmark = pytest.mark.smoke
 
@@ -26,7 +26,7 @@ async def test_dense_retrieval_round_trip() -> None:
     """A hand-made dense embedding is indexed, retrieved, and mapped to text."""
     # Arrange
     index = DenseIndex(3)
-    chunks = ChunkStore()
+    chunks: MemoryStore[int, str] = MemoryStore()
     key = await index.add([1.0, 0.0, 0.0])
     chunks.add(key, "cats")
     chunks.add(await index.add([0.0, 1.0, 0.0]), "stocks")

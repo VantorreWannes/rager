@@ -9,7 +9,7 @@ import pytest
 
 from rager.embedders import SentenceTransformerDenseEmbedder
 from rager.indexes import DenseIndex
-from rager.stores import ChunkStore
+from rager.stores import MemoryStore
 
 pytestmark = pytest.mark.application
 
@@ -26,7 +26,7 @@ async def test_removed_document_drops_out_of_retrieval() -> None:
     # Arrange
     embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
     index = DenseIndex(384)
-    chunks = ChunkStore()
+    chunks: MemoryStore[int, str] = MemoryStore()
     keys: dict[str, int] = {}
     for document in DOCUMENTS:
         key = await index.add(await embedder.embed(document))

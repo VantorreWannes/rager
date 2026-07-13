@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import blake3
 import pytest
 
-from rager.stores import ChunkStore, EmbeddingStore, MetadataStore
+from rager.stores import MemoryStore
 
 if TYPE_CHECKING:
     from rager.types import Hash
@@ -16,76 +16,16 @@ pytestmark = pytest.mark.unit
 
 @dataclass(frozen=True)
 class ChunkMetadata:
-    """Sample metadata satisfying the Metadata protocol."""
+    """Sample hashable value for exercising the store with structured values."""
 
     chunk: str
     file_id: Hash
 
 
-def test_embedding_store_add_and_get() -> None:
-    """get() returns the embedding stored under the key."""
+def test_memory_store_add_and_get() -> None:
+    """get() returns the value stored under the key."""
     # Arrange
-    store: EmbeddingStore[list[float]] = EmbeddingStore()
-
-    # Act
-    store.add(1, [0.1, 0.2])
-
-    # Assert
-    assert store.get(1) == [0.1, 0.2]
-
-
-def test_embedding_store_get_of_absent_key_returns_none() -> None:
-    """get() returns None for a key that was never added."""
-    # Arrange
-    store: EmbeddingStore[list[float]] = EmbeddingStore()
-
-    # Act & Assert
-    assert store.get(1) is None
-
-
-def test_embedding_store_add_overwrites_existing_key() -> None:
-    """add() replaces the embedding stored under an existing key."""
-    # Arrange
-    store: EmbeddingStore[list[float]] = EmbeddingStore()
-
-    # Act
-    store.add(1, [0.1])
-    store.add(1, [0.2])
-
-    # Assert
-    assert store.get(1) == [0.2]
-
-
-def test_embedding_store_remove() -> None:
-    """remove() deletes the embedding stored under the key."""
-    # Arrange
-    store: EmbeddingStore[list[float]] = EmbeddingStore()
-    store.add(1, [0.1])
-
-    # Act
-    store.remove(1)
-
-    # Assert
-    assert store.get(1) is None
-
-
-def test_embedding_store_remove_of_absent_key_is_noop() -> None:
-    """remove() of a key that was never added leaves the store unchanged."""
-    # Arrange
-    store: EmbeddingStore[list[float]] = EmbeddingStore()
-    store.add(1, [0.1])
-
-    # Act
-    store.remove(2)
-
-    # Assert
-    assert store.get(1) == [0.1]
-
-
-def test_chunk_store_add_and_get() -> None:
-    """get() returns the chunk text stored under the key."""
-    # Arrange
-    store = ChunkStore()
+    store: MemoryStore[int, str] = MemoryStore()
 
     # Act
     store.add(1, "a chunk")
@@ -94,19 +34,19 @@ def test_chunk_store_add_and_get() -> None:
     assert store.get(1) == "a chunk"
 
 
-def test_chunk_store_get_of_absent_key_returns_none() -> None:
+def test_memory_store_get_of_absent_key_returns_none() -> None:
     """get() returns None for a key that was never added."""
     # Arrange
-    store = ChunkStore()
+    store: MemoryStore[int, str] = MemoryStore()
 
     # Act & Assert
     assert store.get(1) is None
 
 
-def test_chunk_store_add_overwrites_existing_key() -> None:
-    """add() replaces the chunk text stored under an existing key."""
+def test_memory_store_add_overwrites_existing_key() -> None:
+    """add() replaces the value stored under an existing key."""
     # Arrange
-    store = ChunkStore()
+    store: MemoryStore[int, str] = MemoryStore()
 
     # Act
     store.add(1, "old")
@@ -116,10 +56,10 @@ def test_chunk_store_add_overwrites_existing_key() -> None:
     assert store.get(1) == "new"
 
 
-def test_chunk_store_remove() -> None:
-    """remove() deletes the chunk text stored under the key."""
+def test_memory_store_remove() -> None:
+    """remove() deletes the value stored under the key."""
     # Arrange
-    store = ChunkStore()
+    store: MemoryStore[int, str] = MemoryStore()
     store.add(1, "a chunk")
 
     # Act
@@ -129,10 +69,10 @@ def test_chunk_store_remove() -> None:
     assert store.get(1) is None
 
 
-def test_chunk_store_remove_of_absent_key_is_noop() -> None:
+def test_memory_store_remove_of_absent_key_is_noop() -> None:
     """remove() of a key that was never added leaves the store unchanged."""
     # Arrange
-    store = ChunkStore()
+    store: MemoryStore[int, str] = MemoryStore()
     store.add(1, "a chunk")
 
     # Act
@@ -142,66 +82,27 @@ def test_chunk_store_remove_of_absent_key_is_noop() -> None:
     assert store.get(1) == "a chunk"
 
 
-def test_metadata_store_add_and_get() -> None:
-    """get() returns the metadata stored under the key."""
+def test_memory_store_with_embedding_values() -> None:
+    """The store holds embedding-like tuple values."""
     # Arrange
-    store: MetadataStore[ChunkMetadata] = MetadataStore()
-    metadata = ChunkMetadata(chunk="a chunk", file_id=blake3.blake3(b"a file"))
+    store: MemoryStore[int, tuple[float, ...]] = MemoryStore()
 
     # Act
-    store.add(1, metadata)
+    store.add(1, (0.1, 0.2))
 
     # Assert
-    assert store.get(1) is metadata
+    assert store.get(1) == (0.1, 0.2)
 
 
-def test_metadata_store_get_of_absent_key_returns_none() -> None:
-    """get() returns None for a key that was never added."""
+def test_memory_store_with_hash_keys_and_metadata_values() -> None:
+    """The store is generic over key and value types."""
     # Arrange
-    store: MetadataStore[ChunkMetadata] = MetadataStore()
-
-    # Act & Assert
-    assert store.get(1) is None
-
-
-def test_metadata_store_add_overwrites_existing_key() -> None:
-    """add() replaces the metadata stored under an existing key."""
-    # Arrange
-    store: MetadataStore[ChunkMetadata] = MetadataStore()
-    file_id = blake3.blake3(b"a file")
+    store: MemoryStore[Hash, ChunkMetadata] = MemoryStore()
+    key = blake3.blake3(b"a file")
+    metadata = ChunkMetadata(chunk="a chunk", file_id=key)
 
     # Act
-    store.add(1, ChunkMetadata(chunk="old", file_id=file_id))
-    store.add(1, ChunkMetadata(chunk="new", file_id=file_id))
+    store.add(key, metadata)
 
     # Assert
-    metadata = store.get(1)
-    assert metadata is not None
-    assert metadata.chunk == "new"
-
-
-def test_metadata_store_remove() -> None:
-    """remove() deletes the metadata stored under the key."""
-    # Arrange
-    store: MetadataStore[ChunkMetadata] = MetadataStore()
-    store.add(1, ChunkMetadata(chunk="a chunk", file_id=blake3.blake3(b"a file")))
-
-    # Act
-    store.remove(1)
-
-    # Assert
-    assert store.get(1) is None
-
-
-def test_metadata_store_remove_of_absent_key_is_noop() -> None:
-    """remove() of a key that was never added leaves the store unchanged."""
-    # Arrange
-    store: MetadataStore[ChunkMetadata] = MetadataStore()
-    metadata = ChunkMetadata(chunk="a chunk", file_id=blake3.blake3(b"a file"))
-    store.add(1, metadata)
-
-    # Act
-    store.remove(2)
-
-    # Assert
-    assert store.get(1) is metadata
+    assert store.get(key) is metadata
