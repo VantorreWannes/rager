@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class Chunker(Protocol):
     """Protocol for chunking units into smaller chunks."""
 
-    def chunk(self, unit: str) -> list[str]:
+    def chunks(self, unit: str) -> list[str]:
         """Split a unit into smaller chunks."""
         ...
 
