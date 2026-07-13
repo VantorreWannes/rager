@@ -6,6 +6,23 @@ readme = "README.md"
 authors = [
     { name = "Wannes Vantorre", email = "vantorrewannes@gmail.com" }
 ]
+maintainers = [
+    { name = "Wannes Vantorre", email = "vantorrewannes@gmail.com" }
+]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = ["rag", "retrieval-augmented-generation", "caching", "embeddings", "faiss", "nlp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 requires-python = ">=3.14"
 dependencies = [
     "belljar>=3.0.0",
@@ -20,6 +37,12 @@ dependencies = [
     "unstructured-inference>=1.6.13",
     "unstructured[csv,md,pdf]>=0.24.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/VantorreWannes/rager"
+Repository = "https://github.com/VantorreWannes/rager"
+Issues = "https://github.com/VantorreWannes/rager/issues"
+Changelog = "https://github.com/VantorreWannes/rager/releases"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12.0"]
