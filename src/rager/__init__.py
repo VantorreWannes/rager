@@ -19,7 +19,7 @@ from rager.parsers import (
     UnstructuredFileParser,
 )
 from rager.scorers import CrossEncoderScorer, Scorer
-from rager.stores import MemoryStore, Store
+from rager.stores import JarStore, MemoryStore, Store
 from rager.types import DenseEmbedding, Hash, SparseEmbedding
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -36,6 +36,7 @@ __all__ = [
     "Generator",
     "Hash",
     "Index",
+    "JarStore",
     "MarkdownFileParser",
     "MemoryStore",
     "Parser",

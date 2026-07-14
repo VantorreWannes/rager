@@ -6,12 +6,21 @@ from typing import TYPE_CHECKING
 import blake3
 import pytest
 
-from rager.stores import MemoryStore
+from rager.stores import JarStore, MemoryStore
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from rager.types import Hash
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.fixture
+def jar_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> JarStore[int, bytes]:
+    """Return a JarStore whose jar directory lives under a temporary path."""
+    monkeypatch.chdir(tmp_path)
+    return JarStore()
 
 
 @dataclass(frozen=True)
@@ -119,3 +128,118 @@ def test_memory_store_with_hash_keys_and_metadata_values() -> None:
 
     # Assert
     assert store.get(key) is metadata
+
+
+def test_jar_store_set_and_get(jar_store: JarStore[int, bytes]) -> None:
+    """get() returns the value sealed under the key."""
+    # Act
+    jar_store.set(1, b"a chunk")
+
+    # Assert
+    assert jar_store.get(1) == b"a chunk"
+
+
+def test_jar_store_seals_values_on_disk(
+    jar_store: JarStore[int, bytes], tmp_path: Path
+) -> None:
+    """set() seals the value in the jar directory."""
+    # Act
+    jar_store.set(1, b"a chunk")
+
+    # Assert
+    assert list((tmp_path / ".jar" / "stores").iterdir())
+
+
+def test_jar_store_keys(jar_store: JarStore[int, bytes]) -> None:
+    """keys() returns the keys stored."""
+    # Act
+    jar_store.set(1, b"a chunk")
+    jar_store.set(2, b"another chunk")
+
+    # Assert
+    assert jar_store.keys() == [1, 2]
+
+
+def test_jar_store_get_of_absent_key_returns_none(
+    jar_store: JarStore[int, bytes],
+) -> None:
+    """get() returns None for a key that was never added."""
+    # Act & Assert
+    assert jar_store.get(1) is None
+
+
+def test_jar_store_get_of_unsealed_value_returns_none(
+    jar_store: JarStore[int, bytes], tmp_path: Path
+) -> None:
+    """get() returns None when the sealed value is gone from the jar."""
+    # Arrange
+    jar_store.set(1, b"a chunk")
+    for file in (tmp_path / ".jar" / "stores").iterdir():
+        file.unlink()
+
+    # Act & Assert
+    assert jar_store.get(1) is None
+
+
+def test_jar_store_set_overwrites_existing_key(
+    jar_store: JarStore[int, bytes],
+) -> None:
+    """set() replaces the value sealed under an existing key."""
+    # Act
+    jar_store.set(1, b"old")
+    jar_store.set(1, b"new")
+
+    # Assert
+    assert jar_store.get(1) == b"new"
+
+
+def test_jar_store_get_of_empty_value_returns_it(
+    jar_store: JarStore[int, bytes],
+) -> None:
+    """get() returns a sealed empty buffer instead of treating it as a miss."""
+    # Act
+    jar_store.set(1, b"")
+
+    # Assert
+    assert jar_store.get(1) == b""
+
+
+def test_jar_store_same_value_under_different_keys(
+    jar_store: JarStore[int, bytes],
+) -> None:
+    """Identical values sealed under different keys resolve independently."""
+    # Act
+    jar_store.set(1, b"a chunk")
+    jar_store.set(2, b"a chunk")
+    jar_store.remove(1)
+
+    # Assert
+    assert jar_store.get(1) is None
+    assert jar_store.get(2) == b"a chunk"
+
+
+def test_jar_store_remove(jar_store: JarStore[int, bytes]) -> None:
+    """remove() deletes the value stored under the key."""
+    # Arrange
+    jar_store.set(1, b"a chunk")
+
+    # Act
+    jar_store.remove(1)
+
+    # Assert
+    assert jar_store.get(1) is None
+    assert jar_store.keys() == []
+
+
+def test_jar_store_remove_of_absent_key_is_noop(
+    jar_store: JarStore[int, bytes],
+) -> None:
+    """remove() of a key that was never added leaves the store unchanged."""
+    # Arrange
+    jar_store.set(1, b"a chunk")
+
+    # Act
+    jar_store.remove(2)
+
+    # Assert
+    assert jar_store.get(1) == b"a chunk"
