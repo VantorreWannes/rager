@@ -26,15 +26,12 @@ def test_unstructured_file_parser_id(blake3: MagicMock) -> None:
     assert result is blake3.return_value
 
 
-@patch("rager.parsers.belljar.check")
-@patch("rager.parsers.belljar.include")
+@patch("rager.parsers.Jar")
 @patch("rager.parsers.partition")
 def test_unstructured_file_parser_units(
-    partition: MagicMock,
-    include: MagicMock,
-    check: MagicMock,
+    partition: MagicMock, jar_cls: MagicMock
 ) -> None:
-    """units() returns the text of every element from partition()."""
+    """units() folds the file digest into the jar and seals the units."""
     # Arrange
     partition.return_value = [
         MagicMock(text="first"),
@@ -42,6 +39,9 @@ def test_unstructured_file_parser_units(
     ]
     file = MagicMock()
     file.read_bytes.return_value = b"payload"
+    jar = jar_cls[list[str]].return_value
+    jar.get.return_value = None
+    jar.set.side_effect = lambda value: value
 
     # Act
     result = UnstructuredFileParser().units(file)
@@ -49,5 +49,26 @@ def test_unstructured_file_parser_units(
     # Assert
     assert result == ["first", "second"]
     partition.assert_called_once_with(filename=str(file))
-    include.assert_called_once()
-    check.assert_called_once()
+    jar.include.assert_any_call(UnstructuredFileParser().id(file).digest())
+    jar.set.assert_called_once_with(["first", "second"])
+
+
+@patch("rager.parsers.Jar")
+@patch("rager.parsers.partition")
+def test_unstructured_file_parser_units_cached(
+    partition: MagicMock, jar_cls: MagicMock
+) -> None:
+    """units() returns the sealed units without parsing on a cache hit."""
+    # Arrange
+    file = MagicMock()
+    file.read_bytes.return_value = b"payload"
+    jar = jar_cls[list[str]].return_value
+    jar.get.return_value = ["first", "second"]
+
+    # Act
+    result = UnstructuredFileParser().units(file)
+
+    # Assert
+    assert result == ["first", "second"]
+    partition.assert_not_called()
+    jar.set.assert_not_called()

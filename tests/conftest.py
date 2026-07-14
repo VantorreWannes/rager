@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-import belljar
 import httpx
 import pytest
+from belljar import Jar
 from lorem_text.lorem import paragraphs, words
 
 
@@ -37,15 +37,16 @@ def paragraphs_file(tmp_path: Path, paragraphs_text: str) -> Path:
 
 
 @pytest.fixture
-@belljar.store(Path(".jar/pdf"))
 def pdf_data() -> bytes:
     """Return sample PDF file data for testing."""
     url = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
-    belljar.include(url)
-    belljar.check()
+    jar = Jar[bytes](Path(".jar/pdf"))
+    jar.include(url)
+    if (cached := jar.get()) is not None:
+        return cached
     response = httpx.get(url, timeout=30)
     response.raise_for_status()
-    return response.content
+    return jar.set(response.content)
 
 
 @pytest.fixture
@@ -57,15 +58,16 @@ def pdf_file(tmp_path: Path, pdf_data: bytes) -> Path:
 
 
 @pytest.fixture
-@belljar.store(Path(".jar/markdown"))
 def markdown_data() -> bytes:
     """Return sample Markdown file data for testing."""
     url = "https://gist.githubusercontent.com/rt2zz/e0a1d6ab2682d2c47746950b84c0b6ee/raw/83b8b4814c3417111b9b9bef86a552608506603e/markdown-sample.md"
-    belljar.include(url)
-    belljar.check()
+    jar = Jar[bytes](Path(".jar/markdown"))
+    jar.include(url)
+    if (cached := jar.get()) is not None:
+        return cached
     response = httpx.get(url, timeout=30)
     response.raise_for_status()
-    return response.content
+    return jar.set(response.content)
 
 
 @pytest.fixture
@@ -77,15 +79,16 @@ def markdown_file(tmp_path: Path, markdown_data: bytes) -> Path:
 
 
 @pytest.fixture
-@belljar.store(Path(".jar/csv"))
 def csv_data() -> bytes:
     """Return sample CSV file data for testing."""
     url = "https://people.sc.fsu.edu/~jburkardt/data/csv/airtravel.csv"
-    belljar.include(url)
-    belljar.check()
+    jar = Jar[bytes](Path(".jar/csv"))
+    jar.include(url)
+    if (cached := jar.get()) is not None:
+        return cached
     response = httpx.get(url, timeout=30)
     response.raise_for_status()
-    return response.content
+    return jar.set(response.content)
 
 
 @pytest.fixture

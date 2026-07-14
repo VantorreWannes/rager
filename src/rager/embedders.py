@@ -5,17 +5,17 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
 
-import belljar
 import concresce
+from belljar import Jar
 from sentence_transformers import SentenceTransformer, SparseEncoder
+
+from rager.types import DenseEmbedding, SparseEmbedding
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
     from torch import Tensor
 
-    from rager import DenseEmbedding
-    from rager.types import SparseEmbedding
 
 logger = logging.getLogger(__name__)
 
@@ -51,14 +51,16 @@ class SentenceTransformerDenseEmbedder:
         embeddings = self.model.encode(chunks, normalize_embeddings=True).tolist()
         return cast("DenseEmbedding", embeddings)
 
-    @belljar.store(Path(".jar/embedders"))
     async def embed(self, chunk: str) -> DenseEmbedding:
         """Convert a text chunk into a vector representation."""
-        belljar.include(self.model_name)
-        belljar.include(chunk)
-        belljar.check()
+        jar = Jar[DenseEmbedding](Path(".jar/embedders"))
+        jar.include(self.embed.__code__)
+        jar.include(self.model_name)
+        jar.include(chunk)
+        if (cached := jar.get()) is not None:
+            return cached
         logger.debug("Cache miss; embedding chunk of %d characters", len(chunk))
-        return await self._encode(chunk)
+        return jar.set(await self._encode(chunk))
 
 
 class SpladeSparseEmbedder:
@@ -110,11 +112,13 @@ class SpladeSparseEmbedder:
         embeddings = self._coalesced_to_embeddings(coalesced, len(chunks))
         return cast("SparseEmbedding", embeddings)
 
-    @belljar.store(Path(".jar/embedders"))
     async def embed(self, chunk: str) -> SparseEmbedding:
         """Convert a text chunk into a sparse vector representation."""
-        belljar.include(self.model_name)
-        belljar.include(chunk)
-        belljar.check()
+        jar = Jar[SparseEmbedding](Path(".jar/embedders"))
+        jar.include(self.embed.__code__)
+        jar.include(self.model_name)
+        jar.include(chunk)
+        if (cached := jar.get()) is not None:
+            return cached
         logger.debug("Cache miss; embedding chunk of %d characters", len(chunk))
-        return await self._encode(chunk)
+        return jar.set(await self._encode(chunk))

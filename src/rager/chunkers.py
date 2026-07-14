@@ -5,7 +5,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
 
-import belljar
+from belljar import Jar
 from semantic_chunker import get_chunker
 
 if TYPE_CHECKING:
@@ -57,15 +57,17 @@ class SemanticChunker:
             ),
         )
 
-    @belljar.store(Path(".jar/chunkers"))
     def chunks(self, unit: str) -> list[str]:
         """Split a unit into semantically meaningful chunks."""
-        belljar.include(self.model_name)
-        belljar.include(self.chunk_size)
-        belljar.include(self.overlap)
-        belljar.include(unit)
-        belljar.check()
+        jar = Jar[list[str]](Path(".jar/chunkers"))
+        jar.include(self.chunks.__code__)
+        jar.include(self.model_name)
+        jar.include(self.chunk_size)
+        jar.include(self.overlap)
+        jar.include(unit)
+        if (cached := jar.get()) is not None:
+            return cached
         logger.debug("Cache miss; chunking unit of %d characters", len(unit))
         chunks = self.model.chunks(unit)
         logger.debug("Split unit into %d chunks", len(chunks))
-        return chunks
+        return jar.set(chunks)
