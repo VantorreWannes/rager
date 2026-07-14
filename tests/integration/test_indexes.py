@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from rager.embedders import SentenceTransformerDenseEmbedder, SpladeSparseEmbedder
-from rager.indexes import DenseIndex, SparseIndex
+from rager.indexes import FileSparseIndex, MemoryDenseIndex, MemorySparseIndex
 
 pytestmark = pytest.mark.integration
 
@@ -13,7 +13,7 @@ pytestmark = pytest.mark.integration
 @pytest.mark.asyncio
 async def test_dense_index_similar_ranks_nearest_first() -> None:
     """similar() returns keys ordered by inner-product similarity."""
-    index = DenseIndex(3)
+    index = MemoryDenseIndex(3)
     x_key = await index.add([1.0, 0.0, 0.0])
     y_key = await index.add([0.0, 1.0, 0.0])
     z_key = await index.add([0.0, 0.0, 1.0])
@@ -26,7 +26,7 @@ async def test_dense_index_similar_ranks_nearest_first() -> None:
 @pytest.mark.asyncio
 async def test_dense_index_add_is_idempotent() -> None:
     """Adding the same embedding twice yields one key and one entry."""
-    index = DenseIndex(3)
+    index = MemoryDenseIndex(3)
 
     first = await index.add([1.0, 0.0, 0.0])
     second = await index.add([1.0, 0.0, 0.0])
@@ -38,7 +38,7 @@ async def test_dense_index_add_is_idempotent() -> None:
 @pytest.mark.asyncio
 async def test_dense_index_remove_drops_key_from_results() -> None:
     """Removed keys no longer appear in similarity results."""
-    index = DenseIndex(3)
+    index = MemoryDenseIndex(3)
     x_key = await index.add([1.0, 0.0, 0.0])
     y_key = await index.add([0.0, 1.0, 0.0])
 
@@ -50,7 +50,7 @@ async def test_dense_index_remove_drops_key_from_results() -> None:
 @pytest.mark.asyncio
 async def test_dense_index_remove_of_absent_key_is_noop() -> None:
     """Removing a key that was never added leaves the index unchanged."""
-    index = DenseIndex(3)
+    index = MemoryDenseIndex(3)
     x_key = await index.add([1.0, 0.0, 0.0])
 
     await index.remove(x_key + 1)
@@ -61,7 +61,7 @@ async def test_dense_index_remove_of_absent_key_is_noop() -> None:
 @pytest.mark.asyncio
 async def test_dense_index_similar_on_empty_index() -> None:
     """similar() on an empty index returns no keys."""
-    index = DenseIndex(3)
+    index = MemoryDenseIndex(3)
 
     assert await index.similar([1.0, 0.0, 0.0]) == []
 
@@ -69,7 +69,7 @@ async def test_dense_index_similar_on_empty_index() -> None:
 @pytest.mark.asyncio
 async def test_dense_index_batches_concurrent_adds() -> None:
     """Concurrent add() calls are batched, yet each caller gets its own key."""
-    index = DenseIndex(3)
+    index = MemoryDenseIndex(3)
 
     x_key, y_key = await asyncio.gather(
         index.add([1.0, 0.0, 0.0]), index.add([0.0, 1.0, 0.0])
@@ -82,8 +82,8 @@ async def test_dense_index_batches_concurrent_adds() -> None:
 @pytest.mark.asyncio
 async def test_dense_index_instances_do_not_share_batches() -> None:
     """Concurrent calls on different indexes land in their own index."""
-    first = DenseIndex(3)
-    second = DenseIndex(3)
+    first = MemoryDenseIndex(3)
+    second = MemoryDenseIndex(3)
 
     x_key, y_key = await asyncio.gather(
         first.add([1.0, 0.0, 0.0]), second.add([0.0, 1.0, 0.0])
@@ -96,7 +96,7 @@ async def test_dense_index_instances_do_not_share_batches() -> None:
 @pytest.mark.asyncio
 async def test_dense_index_answers_concurrent_queries() -> None:
     """Concurrent similar() calls are batched, yet each gets its own ranking."""
-    index = DenseIndex(3)
+    index = MemoryDenseIndex(3)
     x_key = await index.add([1.0, 0.0, 0.0])
     y_key = await index.add([0.0, 1.0, 0.0])
 
@@ -112,7 +112,7 @@ async def test_dense_index_answers_concurrent_queries() -> None:
 async def test_dense_index_with_dense_embedder() -> None:
     """Embeddings from the dense embedder retrieve the semantically closest chunk."""
     embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
-    index = DenseIndex(384)
+    index = MemoryDenseIndex(384)
     cats_key = await index.add(await embedder.embed("Cats purr when they are happy."))
     await index.add(await embedder.embed("The stock market closed higher today."))
 
@@ -126,7 +126,21 @@ async def test_dense_index_with_dense_embedder() -> None:
 async def test_sparse_index_with_sparse_embedder() -> None:
     """Embeddings from the sparse embedder retrieve the closest chunk."""
     embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
-    index = SparseIndex()
+    index = MemorySparseIndex()
+    cats_key = await index.add(await embedder.embed("Cats purr when they are happy."))
+    await index.add(await embedder.embed("The stock market closed higher today."))
+
+    query = await embedder.embed("A kitten is purring.")
+    result = await index.similar(query, results=2)
+
+    assert result[0] == cats_key
+
+
+@pytest.mark.asyncio
+async def test_file_sparse_index_with_sparse_embedder() -> None:
+    """Embeddings sealed on disk retrieve the closest chunk."""
+    embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
+    index = FileSparseIndex()
     cats_key = await index.add(await embedder.embed("Cats purr when they are happy."))
     await index.add(await embedder.embed("The stock market closed higher today."))
 

@@ -24,8 +24,8 @@ Wire the primitives together yourself — there is no hidden pipeline. This chun
 ```python
 chunker = SemanticChunker()
 embedder = SentenceTransformerDenseEmbedder()
-index = DenseIndex()
-chunks = ChunkStore()
+index = MemoryDenseIndex()
+chunks = MemoryStore()
 generator = TransformersGenerator()
 
 for document in documents:
@@ -65,8 +65,9 @@ Every stage is a `Protocol` with concrete implementations. `async` methods batch
 ### Indexes — store vectors and search by similarity
 
 - **`Index[E, K]`** — protocol: `async add(embedding) -> key`, `async remove(key)`, `async similar(embedding, results=100) -> list[key]`. Ranks by inner product (equals cosine for L2-normalized vectors). Keys are derived from embedding content, so adding the same vector twice yields one entry.
-- **`DenseIndex`** — flat [FAISS](https://github.com/facebookresearch/faiss) index; `DenseIndex(dimensions=None)` infers width from the first vector unless fixed.
-- **`SparseIndex`** — inner-product search over sparse weight maps.
+- **`MemoryDenseIndex`** — flat [FAISS](https://github.com/facebookresearch/faiss) index; `MemoryDenseIndex(dimensions=None)` infers width from the first vector unless fixed.
+- **`MemorySparseIndex`** — in-memory inner-product search over sparse weight maps.
+- **`FileSparseIndex`** — like `MemorySparseIndex`, but seals embeddings on disk under `.jar/`, keeping only keys in memory.
 
 ### Fusers — merge ranked lists
 
@@ -86,13 +87,12 @@ Every stage is a `Protocol` with concrete implementations. `async` methods batch
 
 ### Stores — map index keys back to data
 
-- **`Store[V, K]`** — protocol: `set(key, value)`, `get(key) -> value | None`, `remove(key)`.
-- **`ChunkStore`** — in-memory map from key to chunk text, resolving a search hit to its source.
-- **`MetadataStore[M: Metadata]`** — in-memory map from key to per-chunk metadata.
+- **`Store[K, V]`** — protocol: `set(key, value)`, `get(key) -> value | None`, `remove(key)`, `keys()`.
+- **`MemoryStore[K, V]`** — in-memory map from key to value (chunk text, embeddings, metadata, ...).
+- **`FileStore[K, V]`** — like `MemoryStore`, but seals buffer values on disk under `.jar/`, keeping only keys and digests in memory.
 
 ### Types
 
 - **`Hash`** — a `blake3` hasher; the content ID returned by parsers.
 - **`DenseEmbedding`** — `list[float]`.
 - **`SparseEmbedding`** — `dict[int, float]` mapping token id to weight.
-- **`Metadata`** — protocol for metadata classes used with `MetadataStore`.

@@ -8,7 +8,7 @@ ingestion must disappear from results once removed, leaving the rest intact.
 import pytest
 
 from rager.embedders import SentenceTransformerDenseEmbedder
-from rager.indexes import DenseIndex
+from rager.indexes import MemoryDenseIndex
 from rager.stores import MemoryStore
 
 pytestmark = pytest.mark.application
@@ -25,7 +25,7 @@ async def test_removed_document_drops_out_of_retrieval() -> None:
     """A removed chunk stops appearing in results while the others remain."""
     # Arrange
     embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
-    index = DenseIndex(384)
+    index = MemoryDenseIndex(384)
     chunks: MemoryStore[int, str] = MemoryStore()
     keys: dict[str, int] = {}
     for document in DOCUMENTS:
