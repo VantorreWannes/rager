@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import blake3
 import pytest
 
-from rager.stores import JarStore, MemoryStore
+from rager.stores import CachedMemoryStore, MemoryStore
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -17,10 +17,12 @@ pytestmark = pytest.mark.unit
 
 
 @pytest.fixture
-def jar_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> JarStore[int, bytes]:
-    """Return a JarStore whose jar directory lives under a temporary path."""
+def jar_store(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> CachedMemoryStore[int, bytes]:
+    """Return a CachedMemoryStore whose jar directory lives under a temporary path."""
     monkeypatch.chdir(tmp_path)
-    return JarStore()
+    return CachedMemoryStore()
 
 
 @dataclass(frozen=True)
@@ -130,7 +132,7 @@ def test_memory_store_with_hash_keys_and_metadata_values() -> None:
     assert store.get(key) is metadata
 
 
-def test_jar_store_set_and_get(jar_store: JarStore[int, bytes]) -> None:
+def test_jar_store_set_and_get(jar_store: CachedMemoryStore[int, bytes]) -> None:
     """get() returns the value sealed under the key."""
     # Act
     jar_store.set(1, b"a chunk")
@@ -140,7 +142,7 @@ def test_jar_store_set_and_get(jar_store: JarStore[int, bytes]) -> None:
 
 
 def test_jar_store_seals_values_on_disk(
-    jar_store: JarStore[int, bytes], tmp_path: Path
+    jar_store: CachedMemoryStore[int, bytes], tmp_path: Path
 ) -> None:
     """set() seals the value in the jar directory."""
     # Act
@@ -150,7 +152,7 @@ def test_jar_store_seals_values_on_disk(
     assert list((tmp_path / ".jar" / "stores").iterdir())
 
 
-def test_jar_store_keys(jar_store: JarStore[int, bytes]) -> None:
+def test_jar_store_keys(jar_store: CachedMemoryStore[int, bytes]) -> None:
     """keys() returns the keys stored."""
     # Act
     jar_store.set(1, b"a chunk")
@@ -161,7 +163,7 @@ def test_jar_store_keys(jar_store: JarStore[int, bytes]) -> None:
 
 
 def test_jar_store_get_of_absent_key_returns_none(
-    jar_store: JarStore[int, bytes],
+    jar_store: CachedMemoryStore[int, bytes],
 ) -> None:
     """get() returns None for a key that was never added."""
     # Act & Assert
@@ -169,7 +171,7 @@ def test_jar_store_get_of_absent_key_returns_none(
 
 
 def test_jar_store_get_of_unsealed_value_returns_none(
-    jar_store: JarStore[int, bytes], tmp_path: Path
+    jar_store: CachedMemoryStore[int, bytes], tmp_path: Path
 ) -> None:
     """get() returns None when the sealed value is gone from the jar."""
     # Arrange
@@ -182,7 +184,7 @@ def test_jar_store_get_of_unsealed_value_returns_none(
 
 
 def test_jar_store_set_overwrites_existing_key(
-    jar_store: JarStore[int, bytes],
+    jar_store: CachedMemoryStore[int, bytes],
 ) -> None:
     """set() replaces the value sealed under an existing key."""
     # Act
@@ -194,7 +196,7 @@ def test_jar_store_set_overwrites_existing_key(
 
 
 def test_jar_store_get_of_empty_value_returns_it(
-    jar_store: JarStore[int, bytes],
+    jar_store: CachedMemoryStore[int, bytes],
 ) -> None:
     """get() returns a sealed empty buffer instead of treating it as a miss."""
     # Act
@@ -205,7 +207,7 @@ def test_jar_store_get_of_empty_value_returns_it(
 
 
 def test_jar_store_same_value_under_different_keys(
-    jar_store: JarStore[int, bytes],
+    jar_store: CachedMemoryStore[int, bytes],
 ) -> None:
     """Identical values sealed under different keys resolve independently."""
     # Act
@@ -218,7 +220,7 @@ def test_jar_store_same_value_under_different_keys(
     assert jar_store.get(2) == b"a chunk"
 
 
-def test_jar_store_remove(jar_store: JarStore[int, bytes]) -> None:
+def test_jar_store_remove(jar_store: CachedMemoryStore[int, bytes]) -> None:
     """remove() deletes the value stored under the key."""
     # Arrange
     jar_store.set(1, b"a chunk")
@@ -232,7 +234,7 @@ def test_jar_store_remove(jar_store: JarStore[int, bytes]) -> None:
 
 
 def test_jar_store_remove_of_absent_key_is_noop(
-    jar_store: JarStore[int, bytes],
+    jar_store: CachedMemoryStore[int, bytes],
 ) -> None:
     """remove() of a key that was never added leaves the store unchanged."""
     # Arrange

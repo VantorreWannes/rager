@@ -57,7 +57,7 @@ class TransformersGenerator:
         outputs = self.model(
             chats,
             max_new_tokens=self.max_new_tokens,
-            do_sample=False,
+            do_sample=True,
         )
         answers = [output[0]["generated_text"][-1]["content"] for output in outputs]
         return cast("str", answers)
