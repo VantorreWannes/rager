@@ -60,7 +60,7 @@ class MemoryStore[K: Hashable, V: Hashable]:
         return list(self._map.keys())
 
 
-class JarStore[K: Hashable, V: Buffer]:
+class CachedMemoryStore[K: Hashable, V: Buffer]:
     """JAR-based key-value store mapping index keys to values."""
 
     def __init__(self) -> None:

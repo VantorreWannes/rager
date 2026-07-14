@@ -43,7 +43,7 @@ async def test_transformers_generator_generate(model: MagicMock) -> None:
     model.assert_called_once_with(
         [[{"role": "user", "content": "query"}]],
         max_new_tokens=generator.max_new_tokens,
-        do_sample=False,
+        do_sample=True,
     )
     assert result == expected_answer
 
