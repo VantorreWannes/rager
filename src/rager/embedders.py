@@ -12,7 +12,7 @@ from sentence_transformers import SentenceTransformer, SparseEncoder
 from rager.types import DenseEmbedding, SparseEmbedding
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Awaitable, Iterable, Iterator
 
     from torch import Tensor
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class Embedder[E](Protocol):
     """Protocol for embedders."""
 
-    async def embed(self, chunk: str) -> E:
+    def embed(self, chunk: str) -> Awaitable[E]:
         """Convert a text chunk into a vector representation."""
         ...
 

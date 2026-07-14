@@ -10,6 +10,8 @@ from belljar import Jar
 from transformers import pipeline
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from transformers import TextGenerationPipeline
 
 logger = logging.getLogger(__name__)
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 class Generator(Protocol):
     """Protocol for prompting content generators."""
 
-    async def prompt(self, query: str) -> str:
+    def prompt(self, query: str) -> Awaitable[str]:
         """Generate content based on the query."""
         ...
 

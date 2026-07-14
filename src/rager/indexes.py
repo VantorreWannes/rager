@@ -9,6 +9,8 @@ import faiss
 import numpy as np
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from rager import DenseEmbedding, SparseEmbedding
 
 logger = logging.getLogger(__name__)
@@ -22,15 +24,15 @@ class Index[E, K](Protocol):
     before adding them if you want cosine ranking.
     """
 
-    async def add(self, embedding: E) -> K:
+    def add(self, embedding: E) -> Awaitable[K]:
         """Add an embedding to the index and return its key."""
         ...
 
-    async def remove(self, key: K) -> None:
+    def remove(self, key: K) -> Awaitable[None]:
         """Remove an embedding from the index by its key."""
         ...
 
-    async def similar(self, embedding: E, results: int = 100) -> list[K]:
+    def similar(self, embedding: E, results: int = 100) -> Awaitable[list[K]]:
         """Retrieve the keys of the ``results`` most similar embeddings."""
         ...
 
