@@ -5,8 +5,8 @@ from functools import cached_property
 from pathlib import Path
 from typing import Protocol, cast
 
-import belljar
 import concresce
+from belljar import Jar
 from sentence_transformers import CrossEncoder
 
 logger = logging.getLogger(__name__)
@@ -45,12 +45,14 @@ class CrossEncoderScorer:
         scores = self.model.predict(pairs).tolist()
         return cast("float", scores)
 
-    @belljar.store(Path(".jar/scorers"))
     async def score(self, query: str, chunk: str) -> float:
         """Score a chunk based on its semantic similarity to the query."""
-        belljar.include(self.model_name)
-        belljar.include(query)
-        belljar.include(chunk)
-        belljar.check()
+        jar = Jar[float](Path(".jar/scorers"))
+        jar.include(self.score.__code__)
+        jar.include(self.model_name)
+        jar.include(query)
+        jar.include(chunk)
+        if (cached := jar.get()) is not None:
+            return cached
         logger.debug("Cache miss; scoring chunk of %d characters", len(chunk))
-        return await self._predict(query, chunk)
+        return jar.set(await self._predict(query, chunk))

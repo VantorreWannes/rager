@@ -4,8 +4,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
-import belljar
 import blake3
+from belljar import Jar
 from unstructured.partition.auto import partition
 
 if TYPE_CHECKING:
@@ -29,17 +29,19 @@ class Parser[F](Protocol):
 class UnstructuredFileParser:
     """Parser for unstructured files."""
 
-    @belljar.store(Path(".jar/parsers"))
     def units(self, file: Path) -> list[str]:
         """Extract text units from the unstructured file."""
         file_id = self.id(file)
-        belljar.include(file_id.digest())
-        belljar.check()
+        jar = Jar[list[str]](Path(".jar/parsers"))
+        jar.include(self.units.__code__)
+        jar.include(file_id.digest())
+        if (cached := jar.get()) is not None:
+            return cached
         logger.info("Cache miss; parsing file %s", file)
         elements = partition(filename=str(file))
         units = [element.text for element in elements]
         logger.debug("Extracted %d units from %s", len(units), file)
-        return units
+        return jar.set(units)
 
     def id(self, file: Path) -> Hash:
         """Return the content ID for the unstructured file."""

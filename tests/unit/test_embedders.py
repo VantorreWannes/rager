@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from rager.embedders import SentenceTransformerDenseEmbedder, SpladeSparseEmbedder
+from rager.types import DenseEmbedding, SparseEmbedding
 
 pytestmark = pytest.mark.unit
 
@@ -42,25 +43,48 @@ async def test_sentence_transformer_dense_embedder_encode(model: MagicMock) -> N
 
 
 @patch.object(SentenceTransformerDenseEmbedder, "_encode", new_callable=AsyncMock)
-@patch("rager.embedders.belljar.check")
-@patch("rager.embedders.belljar.include")
+@patch("rager.embedders.Jar")
 @pytest.mark.asyncio
 async def test_sentence_transformer_dense_embedder_embed(
-    include: MagicMock, check: MagicMock, encode: AsyncMock
+    jar_cls: MagicMock, encode: AsyncMock
 ) -> None:
-    """embed() folds its identity into belljar and delegates to _encode."""
+    """embed() folds its identity into the jar and seals the embedding."""
     # Arrange
     embedder = SentenceTransformerDenseEmbedder("test-model")
     encode.return_value = [0.1, 0.2, 0.3]
+    jar = jar_cls[DenseEmbedding].return_value
+    jar.get.return_value = None
+    jar.set.side_effect = lambda value: value
 
     # Act
     result = await embedder.embed("chunk")
 
     # Assert
     encode.assert_awaited_once_with("chunk")
-    include.assert_any_call("test-model")
-    include.assert_any_call("chunk")
-    check.assert_called_once()
+    jar.include.assert_any_call("test-model")
+    jar.include.assert_any_call("chunk")
+    jar.set.assert_called_once_with([0.1, 0.2, 0.3])
+    assert result == [0.1, 0.2, 0.3]
+
+
+@patch.object(SentenceTransformerDenseEmbedder, "_encode", new_callable=AsyncMock)
+@patch("rager.embedders.Jar")
+@pytest.mark.asyncio
+async def test_sentence_transformer_dense_embedder_embed_cached(
+    jar_cls: MagicMock, encode: AsyncMock
+) -> None:
+    """embed() returns the sealed embedding without encoding on a cache hit."""
+    # Arrange
+    embedder = SentenceTransformerDenseEmbedder("test-model")
+    jar = jar_cls[DenseEmbedding].return_value
+    jar.get.return_value = [0.1, 0.2, 0.3]
+
+    # Act
+    result = await embedder.embed("chunk")
+
+    # Assert
+    encode.assert_not_awaited()
+    jar.set.assert_not_called()
     assert result == [0.1, 0.2, 0.3]
 
 
@@ -151,23 +175,46 @@ async def test_splade_sparse_embedder_does_not_batch_across_instances(
 
 
 @patch.object(SpladeSparseEmbedder, "_encode", new_callable=AsyncMock)
-@patch("rager.embedders.belljar.check")
-@patch("rager.embedders.belljar.include")
+@patch("rager.embedders.Jar")
 @pytest.mark.asyncio
 async def test_splade_sparse_embedder_embed(
-    include: MagicMock, check: MagicMock, encode: AsyncMock
+    jar_cls: MagicMock, encode: AsyncMock
 ) -> None:
-    """embed() folds its identity into belljar and delegates to _encode."""
+    """embed() folds its identity into the jar and seals the embedding."""
     # Arrange
     embedder = SpladeSparseEmbedder("test-model")
     encode.return_value = {5: 1.5, 9: 2.5}
+    jar = jar_cls[SparseEmbedding].return_value
+    jar.get.return_value = None
+    jar.set.side_effect = lambda value: value
 
     # Act
     result = await embedder.embed("chunk")
 
     # Assert
     encode.assert_awaited_once_with("chunk")
-    include.assert_any_call("test-model")
-    include.assert_any_call("chunk")
-    check.assert_called_once()
+    jar.include.assert_any_call("test-model")
+    jar.include.assert_any_call("chunk")
+    jar.set.assert_called_once_with({5: 1.5, 9: 2.5})
+    assert result == {5: 1.5, 9: 2.5}
+
+
+@patch.object(SpladeSparseEmbedder, "_encode", new_callable=AsyncMock)
+@patch("rager.embedders.Jar")
+@pytest.mark.asyncio
+async def test_splade_sparse_embedder_embed_cached(
+    jar_cls: MagicMock, encode: AsyncMock
+) -> None:
+    """embed() returns the sealed embedding without encoding on a cache hit."""
+    # Arrange
+    embedder = SpladeSparseEmbedder("test-model")
+    jar = jar_cls[SparseEmbedding].return_value
+    jar.get.return_value = {5: 1.5, 9: 2.5}
+
+    # Act
+    result = await embedder.embed("chunk")
+
+    # Assert
+    encode.assert_not_awaited()
+    jar.set.assert_not_called()
     assert result == {5: 1.5, 9: 2.5}

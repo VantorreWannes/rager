@@ -5,8 +5,8 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
 
-import belljar
 import concresce
+from belljar import Jar
 from transformers import pipeline
 
 if TYPE_CHECKING:
@@ -60,14 +60,16 @@ class TransformersGenerator:
         answers = [output[0]["generated_text"][-1]["content"] for output in outputs]
         return cast("str", answers)
 
-    @belljar.store(Path(".jar/generators"))
     async def prompt(self, query: str) -> str:
         """Generate content based on the query."""
-        belljar.include(self.model_name)
-        belljar.include(self.max_new_tokens)
-        belljar.include(query)
-        belljar.check()
+        jar = Jar[str](Path(".jar/generators"))
+        jar.include(self.prompt.__code__)
+        jar.include(self.model_name)
+        jar.include(self.max_new_tokens)
+        jar.include(query)
+        if (cached := jar.get()) is not None:
+            return cached
         logger.debug(
             "Cache miss; generating answer for query of %d characters", len(query)
         )
-        return await self._generate(query)
+        return jar.set(await self._generate(query))

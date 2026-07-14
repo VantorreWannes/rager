@@ -63,25 +63,49 @@ async def test_cross_encoder_scorer_does_not_batch_across_instances(
 
 
 @patch.object(CrossEncoderScorer, "_predict", new_callable=AsyncMock)
-@patch("rager.scorers.belljar.check")
-@patch("rager.scorers.belljar.include")
+@patch("rager.scorers.Jar")
 @pytest.mark.asyncio
 async def test_cross_encoder_scorer_score(
-    include: MagicMock, check: MagicMock, predict: AsyncMock
+    jar_cls: MagicMock, predict: AsyncMock
 ) -> None:
-    """score() folds its identity into belljar and delegates to _predict."""
+    """score() folds its identity into the jar and seals the score."""
     # Arrange
     scorer = CrossEncoderScorer("test-model")
     expected_score = 0.9
     predict.return_value = expected_score
+    jar = jar_cls[float].return_value
+    jar.get.return_value = None
+    jar.set.side_effect = lambda value: value
 
     # Act
     result = await scorer.score("query", "chunk")
 
     # Assert
     predict.assert_awaited_once_with("query", "chunk")
-    include.assert_any_call("test-model")
-    include.assert_any_call("query")
-    include.assert_any_call("chunk")
-    check.assert_called_once()
+    jar.include.assert_any_call("test-model")
+    jar.include.assert_any_call("query")
+    jar.include.assert_any_call("chunk")
+    jar.set.assert_called_once_with(expected_score)
+    assert result == expected_score
+
+
+@patch.object(CrossEncoderScorer, "_predict", new_callable=AsyncMock)
+@patch("rager.scorers.Jar")
+@pytest.mark.asyncio
+async def test_cross_encoder_scorer_score_cached(
+    jar_cls: MagicMock, predict: AsyncMock
+) -> None:
+    """score() returns the sealed score without predicting on a cache hit."""
+    # Arrange
+    scorer = CrossEncoderScorer("test-model")
+    expected_score = 0.0
+    jar = jar_cls[float].return_value
+    jar.get.return_value = expected_score
+
+    # Act
+    result = await scorer.score("query", "chunk")
+
+    # Assert
+    predict.assert_not_awaited()
+    jar.set.assert_not_called()
     assert result == expected_score

@@ -31,25 +31,44 @@ def test_semantic_chunker_model(get_chunker: MagicMock) -> None:
     )
 
 
-@patch("rager.chunkers.belljar.check")
-@patch("rager.chunkers.belljar.include")
+@patch("rager.chunkers.Jar")
 @patch("rager.chunkers.SemanticChunker.model")
-def test_semantic_chunker_chunks(
-    model: MagicMock, include: MagicMock, check: MagicMock
-) -> None:
-    """chunks() returns the text of every element from units()."""
+def test_semantic_chunker_chunks(model: MagicMock, jar_cls: MagicMock) -> None:
+    """chunks() folds its identity into the jar and seals the chunks."""
     # Arrange
     chunker = SemanticChunker("test-model", 1000, 0)
     text = "This is a test document. It has multiple sentences to be split into chunks."
-    model.chunks.return_value = [
-        "This is a test document.",
-        "It has multiple sentences.",
-    ]
+    chunks = ["This is a test document.", "It has multiple sentences."]
+    model.chunks.return_value = chunks
+    jar = jar_cls[list[str]].return_value
+    jar.get.return_value = None
+    jar.set.side_effect = lambda value: value
 
     # Act
-    _ = chunker.chunks(text)
+    result = chunker.chunks(text)
 
     # Assert
     model.chunks.assert_called_once_with(text)
-    include.assert_any_call(text)
-    check.assert_called()
+    jar.include.assert_any_call("test-model")
+    jar.include.assert_any_call(text)
+    jar.set.assert_called_once_with(chunks)
+    assert result == chunks
+
+
+@patch("rager.chunkers.Jar")
+@patch("rager.chunkers.SemanticChunker.model")
+def test_semantic_chunker_chunks_cached(model: MagicMock, jar_cls: MagicMock) -> None:
+    """chunks() returns the sealed chunks without chunking on a cache hit."""
+    # Arrange
+    chunker = SemanticChunker("test-model", 1000, 0)
+    cached = ["This is a test document."]
+    jar = jar_cls[list[str]].return_value
+    jar.get.return_value = cached
+
+    # Act
+    result = chunker.chunks("This is a test document.")
+
+    # Assert
+    model.chunks.assert_not_called()
+    jar.set.assert_not_called()
+    assert result == cached
