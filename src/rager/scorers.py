@@ -3,11 +3,14 @@
 import logging
 from functools import cached_property
 from pathlib import Path
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 import concresce
 from belljar import Jar
 from sentence_transformers import CrossEncoder
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +18,7 @@ logger = logging.getLogger(__name__)
 class Scorer(Protocol):
     """Protocol for chunk scorers."""
 
-    async def score(self, query: str, chunk: str) -> float:
+    def score(self, query: str, chunk: str) -> Awaitable[float]:
         """Score a chunk based on its semantic similarity to the query."""
         ...
 
