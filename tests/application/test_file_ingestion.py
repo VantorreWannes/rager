@@ -13,7 +13,7 @@ import pytest
 
 from rager.chunkers import SemanticChunker
 from rager.embedders import SentenceTransformerDenseEmbedder
-from rager.indexes import DenseIndex
+from rager.indexes import MemoryDenseIndex
 from rager.parsers import CsvFileParser, MarkdownFileParser, PdfFileParser
 from rager.stores import MemoryStore
 
@@ -43,7 +43,7 @@ async def test_file_ingestion_round_trips(
     # Arrange
     file: Path = request.getfixturevalue(file_fixture)
     embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
-    index = DenseIndex(384)
+    index = MemoryDenseIndex(384)
     chunks: MemoryStore[int, str] = MemoryStore()
     ingested: list[str] = []
     for unit in parser().units(file):

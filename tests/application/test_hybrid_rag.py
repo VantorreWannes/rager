@@ -19,7 +19,7 @@ from rager.chunkers import SemanticChunker
 from rager.embedders import SentenceTransformerDenseEmbedder, SpladeSparseEmbedder
 from rager.fusers import ReciprocalRankFuser
 from rager.generators import TransformersGenerator
-from rager.indexes import DenseIndex, SparseIndex
+from rager.indexes import MemoryDenseIndex, MemorySparseIndex
 from rager.scorers import CrossEncoderScorer
 from rager.stores import MemoryStore
 
@@ -40,8 +40,8 @@ async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
     chunker = SemanticChunker()
     dense_embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
     sparse_embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
-    dense_index = DenseIndex(384)
-    sparse_index = SparseIndex()
+    dense_index = MemoryDenseIndex(384)
+    sparse_index = MemorySparseIndex()
     chunks: MemoryStore[int, str] = MemoryStore()
     fuser: ReciprocalRankFuser[int] = ReciprocalRankFuser()
     scorer = CrossEncoderScorer("cross-encoder/ms-marco-MiniLM-L6-v2")

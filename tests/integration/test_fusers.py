@@ -7,7 +7,7 @@ import blake3
 import pytest
 
 from rager.fusers import ReciprocalRankFuser
-from rager.indexes import DenseIndex, SparseIndex
+from rager.indexes import MemoryDenseIndex, MemorySparseIndex
 from rager.stores import MemoryStore
 
 if TYPE_CHECKING:
@@ -32,8 +32,8 @@ def _chunks(store: MemoryStore[int, ChunkMetadata], keys: list[int]) -> list[str
 @pytest.mark.asyncio
 async def test_reciprocal_rank_fuser_fuses_dense_and_sparse_retrieval() -> None:
     """Chunks retrieved from dense and sparse indexes fuse into one ranking."""
-    dense_index = DenseIndex(3)
-    sparse_index = SparseIndex()
+    dense_index = MemoryDenseIndex(3)
+    sparse_index = MemorySparseIndex()
     store: MemoryStore[int, ChunkMetadata] = MemoryStore()
     file_id = blake3.blake3(b"a file")
     embeddings = {

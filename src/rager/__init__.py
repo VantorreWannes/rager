@@ -10,7 +10,12 @@ from rager.embedders import (
 )
 from rager.fusers import BordaCountFuser, Fuser, ReciprocalRankFuser
 from rager.generators import Generator, TransformersGenerator
-from rager.indexes import DenseIndex, Index, SparseIndex
+from rager.indexes import (
+    FileSparseIndex,
+    Index,
+    MemoryDenseIndex,
+    MemorySparseIndex,
+)
 from rager.parsers import (
     CsvFileParser,
     MarkdownFileParser,
@@ -19,25 +24,27 @@ from rager.parsers import (
     UnstructuredFileParser,
 )
 from rager.scorers import CrossEncoderScorer, Scorer
-from rager.stores import CachedMemoryStore, MemoryStore, Store
+from rager.stores import FileStore, MemoryStore, Store
 from rager.types import DenseEmbedding, Hash, SparseEmbedding
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "BordaCountFuser",
-    "CachedMemoryStore",
     "Chunker",
     "CrossEncoderScorer",
     "CsvFileParser",
     "DenseEmbedding",
-    "DenseIndex",
     "Embedder",
+    "FileSparseIndex",
+    "FileStore",
     "Fuser",
     "Generator",
     "Hash",
     "Index",
     "MarkdownFileParser",
+    "MemoryDenseIndex",
+    "MemorySparseIndex",
     "MemoryStore",
     "Parser",
     "PdfFileParser",
@@ -46,7 +53,6 @@ __all__ = [
     "SemanticChunker",
     "SentenceTransformerDenseEmbedder",
     "SparseEmbedding",
-    "SparseIndex",
     "SpladeSparseEmbedder",
     "Store",
     "TransformersGenerator",

@@ -9,7 +9,7 @@ import pytest
 
 import rager
 from rager.fusers import BordaCountFuser, ReciprocalRankFuser
-from rager.indexes import DenseIndex, SparseIndex
+from rager.indexes import MemoryDenseIndex, MemorySparseIndex
 from rager.stores import MemoryStore
 
 pytestmark = pytest.mark.smoke
@@ -25,7 +25,7 @@ def test_public_api_exports_resolve() -> None:
 async def test_dense_retrieval_round_trip() -> None:
     """A hand-made dense embedding is indexed, retrieved, and mapped to text."""
     # Arrange
-    index = DenseIndex(3)
+    index = MemoryDenseIndex(3)
     chunks: MemoryStore[int, str] = MemoryStore()
     key = await index.add([1.0, 0.0, 0.0])
     chunks.set(key, "cats")
@@ -43,7 +43,7 @@ async def test_dense_retrieval_round_trip() -> None:
 async def test_sparse_retrieval_round_trip() -> None:
     """A hand-made sparse embedding is indexed and retrieved by overlap."""
     # Arrange
-    index = SparseIndex()
+    index = MemorySparseIndex()
     key = await index.add({1: 1.0, 2: 0.5})
     await index.add({3: 1.0})
 
