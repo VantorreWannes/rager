@@ -1,10 +1,11 @@
 """Key-value store protocol definitions."""
 
 import logging
-from collections.abc import Buffer, Hashable
+from collections.abc import Hashable
 from pathlib import Path
 from typing import Protocol
 
+import dill
 from belljar import Jar
 from blake3 import blake3
 
@@ -60,7 +61,7 @@ class MemoryStore[K: Hashable, V: Hashable]:
         return list(self._map.keys())
 
 
-class FileStore[K: Hashable, V: Buffer]:
+class FileStore[K: Hashable, V: Hashable]:
     """JAR-based key-value store mapping index keys to values.
 
     Values are sealed on disk in a JAR, so only keys and digests stay in memory.
@@ -72,7 +73,7 @@ class FileStore[K: Hashable, V: Buffer]:
 
     def _digest(self, value: V) -> str:
         """Compute the digest for the given value."""
-        return blake3(value).hexdigest()
+        return blake3(dill.dumps(value)).hexdigest()
 
     def _jar(self, key: K, digest: str) -> Jar[V]:
         """Open a jar positioned at the identity of the given key and digest."""

@@ -89,7 +89,7 @@ Every stage is a `Protocol` with concrete implementations. `async` methods batch
 
 - **`Store[K, V]`** — protocol: `set(key, value)`, `get(key) -> value | None`, `remove(key)`, `keys()`.
 - **`MemoryStore[K, V]`** — in-memory map from key to value (chunk text, embeddings, metadata, ...).
-- **`FileStore[K, V]`** — like `MemoryStore`, but seals buffer values on disk under `.jar/`, keeping only keys and digests in memory.
+- **`FileStore[K, V]`** — like `MemoryStore`, but seals values on disk under `.jar/`, keeping only keys and digests in memory.
 
 ### Types
 

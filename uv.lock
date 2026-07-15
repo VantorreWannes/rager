@@ -1772,12 +1772,13 @@ wheels = [
 
 [[package]]
 name = "rager"
-version = "0.1.17"
+version = "0.1.18"
 source = { editable = "." }
 dependencies = [
     { name = "belljar" },
     { name = "blake3" },
     { name = "concresce" },
+    { name = "dill" },
     { name = "faiss-cpu" },
     { name = "numpy" },
     { name = "semantic-chunker" },
@@ -1812,6 +1813,7 @@ requires-dist = [
     { name = "belljar", specifier = ">=0.2.0" },
     { name = "blake3", specifier = ">=1.0.9" },
     { name = "concresce", specifier = ">=0.1.2" },
+    { name = "dill", specifier = ">=0.4.1" },
     { name = "faiss-cpu", specifier = ">=1.14.3" },
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "semantic-chunker", specifier = ">=0.2.0" },
