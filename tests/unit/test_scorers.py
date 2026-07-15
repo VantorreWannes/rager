@@ -5,9 +5,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from rager.scorers import CrossEncoderScorer
+from rager.scorers import BaseScorer, CrossEncoderScorer
 
 pytestmark = pytest.mark.unit
+
+
+def test_base_scorer_is_abstract() -> None:
+    """BaseScorer cannot be instantiated without the jar and predict operations."""
+    # Act & Assert
+    with pytest.raises(TypeError):
+        BaseScorer()  # type: ignore[abstract]
 
 
 @patch("rager.scorers.CrossEncoder")

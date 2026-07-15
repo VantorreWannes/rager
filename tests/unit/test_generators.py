@@ -5,9 +5,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from rager.generators import TransformersGenerator
+from rager.generators import BaseGenerator, TransformersGenerator
 
 pytestmark = pytest.mark.unit
+
+
+def test_base_generator_is_abstract() -> None:
+    """BaseGenerator cannot be instantiated without the jar and generate operations."""
+    # Act & Assert
+    with pytest.raises(TypeError):
+        BaseGenerator()  # type: ignore[abstract]
 
 
 @patch("rager.generators.pipeline")

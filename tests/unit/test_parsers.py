@@ -4,9 +4,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from rager.parsers import UnstructuredFileParser
+from rager.parsers import BaseParser, UnstructuredFileParser
 
 pytestmark = pytest.mark.unit
+
+
+def test_base_parser_is_abstract() -> None:
+    """BaseParser cannot be instantiated without the jar, parse, and id operations."""
+    # Act & Assert
+    with pytest.raises(TypeError):
+        BaseParser()  # type: ignore[abstract]
 
 
 @patch("rager.parsers.blake3.blake3")
