@@ -27,9 +27,9 @@ async def test_dense_retrieval_round_trip() -> None:
     # Arrange
     index: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
     chunks: MemoryStore[str, str] = MemoryStore()
-    index["cats"] = [1.0, 0.0, 0.0]
+    await index.set("cats", [1.0, 0.0, 0.0])
     chunks.set("cats", "cats")
-    index["stocks"] = [0.0, 1.0, 0.0]
+    await index.set("stocks", [0.0, 1.0, 0.0])
     chunks.set("stocks", "stocks")
 
     # Act
@@ -45,8 +45,8 @@ async def test_sparse_retrieval_round_trip() -> None:
     """A hand-made sparse embedding is indexed and retrieved by overlap."""
     # Arrange
     index: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
-    index["overlap"] = {1: 1.0, 2: 0.5}
-    index["disjoint"] = {3: 1.0}
+    await index.set("overlap", {1: 1.0, 2: 0.5})
+    await index.set("disjoint", {3: 1.0})
 
     # Act
     (nearest,) = await index.similar({1: 1.0}, embedding_results=1)

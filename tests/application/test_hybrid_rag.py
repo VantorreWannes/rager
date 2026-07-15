@@ -53,8 +53,8 @@ async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
             dense, sparse = await asyncio.gather(
                 dense_embedder.embed(chunk), sparse_embedder.embed(chunk)
             )
-            dense_index[identifier] = dense
-            sparse_index[identifier] = sparse
+            await dense_index.set(identifier, dense)
+            await sparse_index.set(identifier, sparse)
             chunks.set(identifier, chunk)
             identifier += 1
 

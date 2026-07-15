@@ -48,7 +48,7 @@ async def test_file_ingestion_round_trips(
     ingested: list[str] = []
     for unit in parser().units(file):
         for chunk in SemanticChunker().chunks(unit):
-            index[len(ingested)] = await embedder.embed(chunk)
+            await index.set(len(ingested), await embedder.embed(chunk))
             chunks.set(len(ingested), chunk)
             ingested.append(chunk)
 

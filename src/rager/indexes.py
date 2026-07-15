@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, cast, override
+from typing import TYPE_CHECKING, Protocol, cast
 
 import concresce
 import dill
@@ -11,25 +11,41 @@ import numpy as np
 from belljar import Jar
 from blake3 import blake3
 
-from rager.stores import BaseStore, Store
-from rager.types import SparseEmbedding
-
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Hashable
+
+    from rager.stores import Store
+    from rager.types import SparseEmbedding
 
 
 logger = logging.getLogger(__name__)
 
 
-class Index[K, E](Store[K, E], Protocol):
+class Index[K, E](Protocol):
     """Protocol for an embedding index."""
+
+    def keys(self) -> Awaitable[list[K]]:
+        """Return the keys in the index."""
+        ...
+
+    def get(self, key: K) -> Awaitable[E | None]:
+        """Retrieve an embedding by its key, or None if the key is not present."""
+        ...
+
+    def set(self, key: K, value: E) -> Awaitable[None]:
+        """Store an embedding with the given key."""
+        ...
+
+    def remove(self, key: K) -> Awaitable[None]:
+        """Remove an embedding by its key."""
+        ...
 
     def similar(self, embedding: E, embedding_results: int) -> Awaitable[list[K]]:
         """Retrieve the keys of the ``embedding_results`` most similar embeddings."""
         ...
 
 
-class FaissIndex[K: Hashable, E](BaseStore[K, E]):
+class FaissIndex[K: Hashable, E]:
     """Index for embeddings using FAISS.
 
     Similarity search runs on an in-memory FAISS index, while the embeddings
@@ -46,9 +62,8 @@ class FaissIndex[K: Hashable, E](BaseStore[K, E]):
         """Open a jar positioned at the identity of the given key and FAISS id."""
         jar = Jar[E](Path(".jar/indexes"))
         jar.include(self.keys.__code__)
-        jar.include(self.__setitem__.__code__)
-        jar.include(self.__getitem__.__code__)
-        jar.include(self.__delitem__.__code__)
+        jar.include(self.get.__code__)
+        jar.include(self.remove.__code__)
         jar.include(self._jar.__code__)
         jar.include(key)
         jar.include(faiss_id)
@@ -72,35 +87,43 @@ class FaissIndex[K: Hashable, E](BaseStore[K, E]):
             raise ValueError(message)
         return rows
 
-    @override
-    def keys(self) -> list[K]:
-        """Return the keys in the store."""
+    async def keys(self) -> list[K]:
+        """Return the keys in the index."""
         return self._key_map.keys()
 
-    @override
-    def __setitem__(self, key: K, value: E) -> None:
-        """Store an embedding with the given key."""
-        logger.debug("Storing embedding for key %r", key)
-        rows = self._to_rows([value])
-        faiss_id = self._id(key)
-        ids = np.asarray([faiss_id], dtype=np.int64)
+    @concresce.batch
+    async def set(self, key: K, value: E) -> None:
+        """Set an embedding for a key."""
+        collected = await concresce.collect((key, value))
+        keys = [k for k, _ in collected]
+        values = [v for _, v in collected]
+        rows = self._to_rows(values)
+        faiss_ids = [self._id(k) for k in keys]
+        ids = np.asarray(faiss_ids, dtype=np.int64)
         self.index.remove_ids(faiss.IDSelectorBatch(ids))
         self.index.add_with_ids(rows, ids)
-        self._jar(key, faiss_id).set(value)
-        self._key_map[key] = faiss_id
+        for key, faiss_id, value in zip(keys, faiss_ids, values, strict=True):  # noqa: PLR1704
+            self._jar(key, faiss_id).set(value)
+            self._key_map[key] = faiss_id
+        return concresce.scatter([None] * len(collected))
 
-    @override
-    def __getitem__(self, key: K) -> E:
-        """Retrieve an embedding by its key."""
+    async def get(self, key: K) -> E | None:
+        """Retrieve an embedding by its key, or None if the key is not present."""
         logger.debug("Retrieving embedding for key %r", key)
-        faiss_id = self._key_map[key]
+        try:
+            faiss_id = self._key_map[key]
+        except KeyError:
+            return None
         return cast("E", self._jar(key, faiss_id).get())
 
-    @override
-    def __delitem__(self, key: K) -> None:
+    async def remove(self, key: K) -> None:
         """Remove an embedding by its key."""
         logger.debug("Removing embedding for key %r", key)
-        ids = np.asarray([self._key_map[key]], dtype=np.int64)
+        try:
+            faiss_id = self._key_map[key]
+        except KeyError:
+            return
+        ids = np.asarray([faiss_id], dtype=np.int64)
         self.index.remove_ids(faiss.IDSelectorBatch(ids))
         del self._key_map[key]
 
@@ -148,7 +171,7 @@ def _top_keys[K](scores: dict[K, float], results: int) -> list[K]:
     return [key for key in ranked[:results] if scores[key] > 0]
 
 
-class SparseIndex[K: Hashable](BaseStore[K, SparseEmbedding]):
+class SparseIndex[K: Hashable]:
     """Sparse index using inner-product similarity over weight maps.
 
     The embeddings and the inverted token index are delegated to the injected
@@ -185,38 +208,43 @@ class SparseIndex[K: Hashable](BaseStore[K, SparseEmbedding]):
         else:
             del self._token_map[token]
 
-    @override
-    def keys(self) -> list[K]:
+    async def keys(self) -> list[K]:
         """Return the keys in the store."""
         return self._embedding_map.keys()
 
-    @override
-    def __setitem__(self, key: K, value: SparseEmbedding) -> None:
-        """Store an embedding with the given key."""
-        logger.debug("Storing embedding for key %r", key)
-        try:
-            stale = self._embedding_map[key] or {}
-        except KeyError:
-            stale = {}
-        for token in stale.keys() - value.keys():
-            self._drop(token, key)
-        for token, weight in value.items():
-            postings = self._postings(token)
-            postings[key] = weight
-            self._token_map[token] = postings
-        self._embedding_map[key] = value
+    @concresce.batch
+    async def set(self, key: K, value: SparseEmbedding) -> None:
+        """Set the embedding for the given key."""
+        collected = await concresce.collect((key, value))
+        for key, value in collected:  # noqa: PLR1704
+            try:
+                stale = self._embedding_map[key] or {}
+            except KeyError:
+                stale = {}
+            for token in stale.keys() - value.keys():
+                self._drop(token, key)
+            for token, weight in value.items():
+                postings = self._postings(token)
+                postings[key] = weight
+                self._token_map[token] = postings
+            self._embedding_map[key] = value
+        return concresce.scatter([None] * len(collected))
 
-    @override
-    def __getitem__(self, key: K) -> SparseEmbedding:
-        """Retrieve an embedding by its key."""
+    async def get(self, key: K) -> SparseEmbedding | None:
+        """Retrieve an embedding by its key, or None if the key is not present."""
         logger.debug("Retrieving embedding for key %r", key)
-        return self._embedding_map[key]
+        try:
+            return self._embedding_map[key]
+        except KeyError:
+            return None
 
-    @override
-    def __delitem__(self, key: K) -> None:
+    async def remove(self, key: K) -> None:
         """Remove an embedding by its key."""
         logger.debug("Removing embedding for key %r", key)
-        embedding = self._embedding_map[key] or {}
+        try:
+            embedding = self._embedding_map[key] or {}
+        except KeyError:
+            return
         for token in embedding:
             self._drop(token, key)
         del self._embedding_map[key]

@@ -45,25 +45,35 @@ def test_faiss_index_id_is_deterministic() -> None:
     assert np.asarray([key], dtype=np.int64)[0] == key
 
 
-def test_faiss_index_rejects_mismatched_dimensions(
+@pytest.mark.asyncio
+async def test_faiss_index_rejects_mismatched_dimensions(
     dense_index: FaissIndex[str, list[float]],
 ) -> None:
     """Storing an embedding whose width differs from the fixed dimension fails."""
     # Act & Assert
     with pytest.raises(ValueError, match="4 dimensions"):
-        dense_index["x"] = [0.1, 0.2, 0.3, 0.4]
+        await dense_index.set("x", [0.1, 0.2, 0.3, 0.4])
 
 
 @pytest.mark.asyncio
-async def test_faiss_index_getitem_returns_stored_embedding(
+async def test_faiss_index_get_returns_stored_embedding(
     dense_index: FaissIndex[str, list[float]],
 ) -> None:
-    """__getitem__() returns the embedding sealed under the key."""
+    """get() returns the embedding sealed under the key."""
     # Act
-    dense_index["x"] = [1.0, 0.0, 0.0]
+    await dense_index.set("x", [1.0, 0.0, 0.0])
 
     # Assert
-    assert dense_index["x"] == [1.0, 0.0, 0.0]
+    assert await dense_index.get("x") == [1.0, 0.0, 0.0]
+
+
+@pytest.mark.asyncio
+async def test_faiss_index_get_of_absent_key_returns_none(
+    dense_index: FaissIndex[str, list[float]],
+) -> None:
+    """get() returns None for a key that was never stored."""
+    # Act & Assert
+    assert await dense_index.get("x") is None
 
 
 @pytest.mark.asyncio
@@ -77,11 +87,11 @@ async def test_faiss_index_delegates_keys_and_ids_to_key_map(
     index: FaissIndex[str, list[float]] = FaissIndex(3, key_map)
 
     # Act
-    index["x"] = [1.0, 0.0, 0.0]
+    await index.set("x", [1.0, 0.0, 0.0])
 
     # Assert
     assert key_map.get("x") == FaissIndex._id("x")
-    assert index.keys() == ["x"]
+    assert await index.keys() == ["x"]
 
 
 @pytest.mark.asyncio
@@ -90,9 +100,9 @@ async def test_faiss_index_similar_ranks_nearest_first(
 ) -> None:
     """similar() returns keys ordered by inner-product similarity."""
     # Arrange
-    dense_index["x"] = [1.0, 0.0, 0.0]
-    dense_index["y"] = [0.0, 1.0, 0.0]
-    dense_index["z"] = [0.0, 0.0, 1.0]
+    await dense_index.set("x", [1.0, 0.0, 0.0])
+    await dense_index.set("y", [0.0, 1.0, 0.0])
+    await dense_index.set("z", [0.0, 0.0, 1.0])
 
     # Act & Assert
     assert await dense_index.similar([0.9, 0.4, 0.1], embedding_results=3) == [
@@ -108,8 +118,8 @@ async def test_faiss_index_similar_caps_results(
 ) -> None:
     """similar() returns at most the requested number of results."""
     # Arrange
-    dense_index["x"] = [1.0, 0.0, 0.0]
-    dense_index["y"] = [0.9, 0.1, 0.0]
+    await dense_index.set("x", [1.0, 0.0, 0.0])
+    await dense_index.set("y", [0.9, 0.1, 0.0])
 
     # Act & Assert
     assert await dense_index.similar([1.0, 0.0, 0.0], embedding_results=1) == ["x"]
@@ -130,30 +140,46 @@ async def test_faiss_index_overwrite_reuses_the_key_slot(
 ) -> None:
     """Restoring a key replaces its embedding without growing the index."""
     # Act
-    dense_index["x"] = [1.0, 0.0, 0.0]
-    dense_index["x"] = [0.0, 1.0, 0.0]
+    await dense_index.set("x", [1.0, 0.0, 0.0])
+    await dense_index.set("x", [0.0, 1.0, 0.0])
 
     # Assert
     assert dense_index.index.ntotal == 1
-    assert dense_index["x"] == [0.0, 1.0, 0.0]
+    assert await dense_index.get("x") == [0.0, 1.0, 0.0]
     assert await dense_index.similar([0.0, 1.0, 0.0], embedding_results=1) == ["x"]
 
 
 @pytest.mark.asyncio
-async def test_faiss_index_delitem_drops_key_from_results(
+async def test_faiss_index_remove_drops_key_from_results(
     dense_index: FaissIndex[str, list[float]],
 ) -> None:
     """A removed key no longer appears in similarity results."""
     # Arrange
-    dense_index["x"] = [1.0, 0.0, 0.0]
-    dense_index["y"] = [0.0, 1.0, 0.0]
+    await dense_index.set("x", [1.0, 0.0, 0.0])
+    await dense_index.set("y", [0.0, 1.0, 0.0])
 
     # Act
-    del dense_index["x"]
+    await dense_index.remove("x")
 
     # Assert
-    assert dense_index.keys() == ["y"]
+    assert await dense_index.keys() == ["y"]
     assert await dense_index.similar([1.0, 0.0, 0.0], embedding_results=2) == ["y"]
+
+
+@pytest.mark.asyncio
+async def test_faiss_index_remove_of_absent_key_is_noop(
+    dense_index: FaissIndex[str, list[float]],
+) -> None:
+    """Removing a key that was never stored leaves the index unchanged."""
+    # Arrange
+    await dense_index.set("x", [1.0, 0.0, 0.0])
+
+    # Act
+    await dense_index.remove("y")
+
+    # Assert
+    assert await dense_index.keys() == ["x"]
+    assert await dense_index.similar([1.0, 0.0, 0.0]) == ["x"]
 
 
 @pytest.mark.asyncio
@@ -166,8 +192,8 @@ async def test_faiss_index_can_use_a_file_backed_key_map(
     index: FaissIndex[str, list[float]] = FaissIndex(3, FileStore())
 
     # Act
-    index["x"] = [1.0, 0.0, 0.0]
-    index["y"] = [0.0, 1.0, 0.0]
+    await index.set("x", [1.0, 0.0, 0.0])
+    await index.set("y", [0.0, 1.0, 0.0])
 
     # Assert
     assert await index.similar([1.0, 0.1, 0.0], embedding_results=2) == ["x", "y"]
@@ -189,17 +215,18 @@ def test_faiss_index_init_builds_the_index(faiss: MagicMock) -> None:
 
 
 @patch("rager.indexes.faiss")
-def test_faiss_index_setitem_dedups_then_adds(
+@pytest.mark.asyncio
+async def test_faiss_index_set_dedups_then_adds(
     faiss: MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """__setitem__() removes any previous entry, then adds the row under its id."""
+    """set() removes any previous entry, then adds the row under its id."""
     # Arrange
     monkeypatch.chdir(tmp_path)
     index: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
     faiss_index = faiss.IndexIDMap.return_value
 
     # Act
-    index["x"] = [0.1, 0.2, 0.3]
+    await index.set("x", [0.1, 0.2, 0.3])
 
     # Assert
     faiss.IDSelectorBatch.assert_called_once()
@@ -220,8 +247,8 @@ async def test_faiss_index_similar_coalesces_concurrent_queries(
     index: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
     faiss_index = faiss.IndexIDMap.return_value
     faiss_index.ntotal = 2
-    index["x"] = [1.0, 0.0, 0.0]
-    index["y"] = [0.0, 1.0, 0.0]
+    await index.set("x", [1.0, 0.0, 0.0])
+    await index.set("y", [0.0, 1.0, 0.0])
     x, y = FaissIndex._id("x"), FaissIndex._id("y")
     faiss_index.search.return_value = (
         np.asarray([[0.9, 0.5], [0.8, -1.0]], dtype=np.float32),
@@ -271,8 +298,8 @@ async def test_faiss_index_does_not_batch_across_instances(
     second: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
     faiss_index = faiss.IndexIDMap.return_value
     faiss_index.ntotal = 1
-    first["x"] = [1.0, 0.0, 0.0]
-    second["y"] = [0.0, 1.0, 0.0]
+    await first.set("x", [1.0, 0.0, 0.0])
+    await second.set("y", [0.0, 1.0, 0.0])
     faiss_index.search.return_value = (
         np.asarray([[0.9]], dtype=np.float32),
         np.asarray([[FaissIndex._id("x")]], dtype=np.int64),
@@ -325,15 +352,24 @@ def test_top_keys_ranks_and_drops_non_positive() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_getitem_returns_stored_embedding(
+async def test_sparse_index_get_returns_stored_embedding(
     sparse_index: SparseIndex[str],
 ) -> None:
-    """__getitem__() returns the weight map stored under the key."""
+    """get() returns the weight map stored under the key."""
     # Act
-    sparse_index["x"] = {1: 1.0, 2: 0.5}
+    await sparse_index.set("x", {1: 1.0, 2: 0.5})
 
     # Assert
-    assert sparse_index["x"] == {1: 1.0, 2: 0.5}
+    assert await sparse_index.get("x") == {1: 1.0, 2: 0.5}
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_get_of_absent_key_returns_none(
+    sparse_index: SparseIndex[str],
+) -> None:
+    """get() returns None for a key that was never stored."""
+    # Act & Assert
+    assert await sparse_index.get("x") is None
 
 
 @pytest.mark.asyncio
@@ -342,8 +378,8 @@ async def test_sparse_index_similar_ranks_nearest_first(
 ) -> None:
     """similar() returns keys ordered by inner-product similarity."""
     # Arrange
-    sparse_index["x"] = {1: 1.0}
-    sparse_index["y"] = {1: 0.5, 2: 0.5}
+    await sparse_index.set("x", {1: 1.0})
+    await sparse_index.set("y", {1: 0.5, 2: 0.5})
 
     # Act & Assert
     assert await sparse_index.similar({1: 1.0}) == ["x", "y"]
@@ -355,8 +391,8 @@ async def test_sparse_index_similar_drops_non_matching_keys(
 ) -> None:
     """similar() omits stored embeddings sharing no tokens with the query."""
     # Arrange
-    sparse_index["x"] = {1: 1.0}
-    sparse_index["y"] = {2: 1.0}
+    await sparse_index.set("x", {1: 1.0})
+    await sparse_index.set("y", {2: 1.0})
 
     # Act & Assert
     assert await sparse_index.similar({1: 1.0}) == ["x"]
@@ -368,8 +404,8 @@ async def test_sparse_index_similar_caps_results(
 ) -> None:
     """similar() returns at most the requested number of results."""
     # Arrange
-    sparse_index["x"] = {1: 1.0}
-    sparse_index["y"] = {1: 0.5}
+    await sparse_index.set("x", {1: 1.0})
+    await sparse_index.set("y", {1: 0.5})
 
     # Act & Assert
     assert await sparse_index.similar({1: 1.0}, embedding_results=1) == ["x"]
@@ -390,8 +426,8 @@ async def test_sparse_index_overwrite_rewires_the_inverted_index(
 ) -> None:
     """Restoring a key retires its stale tokens and registers the new ones."""
     # Act
-    sparse_index["x"] = {1: 1.0}
-    sparse_index["x"] = {2: 1.0}
+    await sparse_index.set("x", {1: 1.0})
+    await sparse_index.set("x", {2: 1.0})
 
     # Assert
     assert await sparse_index.similar({1: 1.0}) == []
@@ -399,36 +435,52 @@ async def test_sparse_index_overwrite_rewires_the_inverted_index(
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_delitem_drops_key_from_results(
+async def test_sparse_index_remove_drops_key_from_results(
     sparse_index: SparseIndex[str],
 ) -> None:
     """A removed key no longer appears in similarity results."""
     # Arrange
-    sparse_index["x"] = {1: 1.0}
-    sparse_index["y"] = {1: 0.5}
+    await sparse_index.set("x", {1: 1.0})
+    await sparse_index.set("y", {1: 0.5})
 
     # Act
-    del sparse_index["x"]
+    await sparse_index.remove("x")
 
     # Assert
-    assert sparse_index.keys() == ["y"]
+    assert await sparse_index.keys() == ["y"]
     assert await sparse_index.similar({1: 1.0}) == ["y"]
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_delitem_tolerates_a_desynced_token_index() -> None:
+async def test_sparse_index_remove_of_absent_key_is_noop(
+    sparse_index: SparseIndex[str],
+) -> None:
+    """Removing a key that was never stored leaves the index unchanged."""
+    # Arrange
+    await sparse_index.set("x", {1: 1.0})
+
+    # Act
+    await sparse_index.remove("y")
+
+    # Assert
+    assert await sparse_index.keys() == ["x"]
+    assert await sparse_index.similar({1: 1.0}) == ["x"]
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_remove_tolerates_a_desynced_token_index() -> None:
     """Removing a key survives a token index cleared out from under the index."""
     # Arrange
     token_map: MemoryStore[int, dict[str, float]] = MemoryStore()
     index: SparseIndex[str] = SparseIndex(MemoryStore(), token_map)
-    index["x"] = {1: 1.0}
+    await index.set("x", {1: 1.0})
     token_map.clear()  # drop the inverted index behind the index's back
 
     # Act
-    del index["x"]  # must not raise despite the missing posting list
+    await index.remove("x")  # must not raise despite the missing posting list
 
     # Assert
-    assert index.keys() == []
+    assert await index.keys() == []
 
 
 @pytest.mark.asyncio
@@ -437,8 +489,8 @@ async def test_sparse_index_similar_loads_only_query_tokens() -> None:
     # Arrange
     token_map = _CountingTokenStore()
     index: SparseIndex[str] = SparseIndex(MemoryStore(), token_map)
-    index["a"] = {1: 1.0}
-    index["b"] = {2: 1.0, 3: 1.0}
+    await index.set("a", {1: 1.0})
+    await index.set("b", {2: 1.0, 3: 1.0})
     token_map.reads.clear()
 
     # Act
@@ -454,8 +506,8 @@ async def test_sparse_index_batches_concurrent_calls(
 ) -> None:
     """Concurrent calls are batched, yet each caller gets its own result."""
     # Arrange
-    sparse_index["x"] = {1: 1.0}
-    sparse_index["y"] = {2: 1.0}
+    await sparse_index.set("x", {1: 1.0})
+    await sparse_index.set("y", {2: 1.0})
 
     # Act
     x_result, y_result = await asyncio.gather(
@@ -473,8 +525,8 @@ async def test_sparse_index_does_not_batch_across_instances() -> None:
     # Arrange
     first: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
     second: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
-    first["x"] = {1: 1.0}
-    second["y"] = {1: 1.0}
+    await first.set("x", {1: 1.0})
+    await second.set("y", {1: 1.0})
 
     # Act
     x_result, y_result = await asyncio.gather(
@@ -496,12 +548,12 @@ async def test_sparse_index_works_with_file_backed_stores(
     index: SparseIndex[str] = SparseIndex(FileStore(), FileStore())
 
     # Act
-    index["x"] = {1: 1.0}
-    index["y"] = {1: 0.5}
+    await index.set("x", {1: 1.0})
+    await index.set("y", {1: 0.5})
 
     # Assert
     assert await index.similar({1: 1.0}) == ["x", "y"]
-    assert index["x"] == {1: 1.0}
+    assert await index.get("x") == {1: 1.0}
     assert list((tmp_path / ".jar" / "stores").iterdir())
 
 
@@ -513,7 +565,7 @@ async def test_sparse_index_drops_unsealed_postings(
     # Arrange
     monkeypatch.chdir(tmp_path)
     index: SparseIndex[str] = SparseIndex(FileStore(), FileStore())
-    index["x"] = {1: 1.0}
+    await index.set("x", {1: 1.0})
     for file in (tmp_path / ".jar" / "stores").iterdir():
         file.unlink()
 

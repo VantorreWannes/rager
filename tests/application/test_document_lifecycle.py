@@ -29,7 +29,7 @@ async def test_removed_document_drops_out_of_retrieval() -> None:
     chunks: MemoryStore[int, str] = MemoryStore()
     keys: dict[str, int] = {}
     for identifier, document in enumerate(DOCUMENTS):
-        index[identifier] = await embedder.embed(document)
+        await index.set(identifier, await embedder.embed(document))
         chunks.set(identifier, document)
         keys[document] = identifier
 
@@ -38,7 +38,7 @@ async def test_removed_document_drops_out_of_retrieval() -> None:
     before = await index.similar(query, embedding_results=len(DOCUMENTS))
     assert chunks.get(before[0]) == DOCUMENTS[0]
 
-    index.remove(keys[DOCUMENTS[0]])
+    await index.remove(keys[DOCUMENTS[0]])
     chunks.remove(keys[DOCUMENTS[0]])
 
     # Assert

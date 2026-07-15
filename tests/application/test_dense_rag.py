@@ -38,7 +38,7 @@ async def test_dense_rag_retrieves_and_answers_from_context() -> None:
     identifier = 0
     for document in DOCUMENTS:
         for chunk in chunker.chunks(document):
-            index[identifier] = await embedder.embed(chunk)
+            await index.set(identifier, await embedder.embed(chunk))
             chunks.set(identifier, chunk)
             identifier += 1
 
