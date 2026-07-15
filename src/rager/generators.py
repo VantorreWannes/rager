@@ -3,7 +3,7 @@
 import logging
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol
 
 import concresce
 from belljar import Jar
@@ -60,7 +60,7 @@ class TransformersGenerator:
             do_sample=True,
         )
         answers = [output[0]["generated_text"][-1]["content"] for output in outputs]
-        return cast("str", answers)
+        return concresce.scatter(answers)
 
     async def prompt(self, query: str) -> str:
         """Generate content based on the query."""

@@ -1,6 +1,6 @@
 [project]
 name = "rager"
-version = "0.1.14"
+version = "0.1.15"
 description = "Caching based RAG primitives"
 readme = "README.md"
 authors = [
@@ -27,7 +27,7 @@ requires-python = ">=3.14"
 dependencies = [
     "belljar>=0.2.0",
     "blake3>=1.0.9",
-    "concresce>=0.1.1",
+    "concresce>=0.1.2",
     "faiss-cpu>=1.14.3",
     "numpy>=2.4.6",
     "semantic-chunker>=0.2.0",

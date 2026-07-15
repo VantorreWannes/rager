@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol
 
 import blake3
 import concresce
@@ -89,7 +89,7 @@ class MemoryDenseIndex:
             len(unique),
             index.ntotal,
         )
-        return cast("int", keys)
+        return concresce.scatter(keys)
 
     @concresce.batch
     async def remove(self, key: int) -> None:
@@ -108,7 +108,7 @@ class MemoryDenseIndex:
                 len(keys),
                 self._index.ntotal,
             )
-        return cast("None", [None] * len(keys))
+        return concresce.scatter([None] * len(keys))
 
     @concresce.batch
     async def similar(self, embedding: DenseEmbedding, results: int = 100) -> list[int]:
@@ -121,7 +121,7 @@ class MemoryDenseIndex:
                 "Similarity search of %d queries on an empty dense index",
                 len(collected),
             )
-            return cast("list[int]", [[] for _ in collected])
+            return concresce.scatter([[] for _ in collected])
         logger.debug(
             "Searching the dense index of %d embeddings with %d queries",
             self._index.ntotal,
@@ -132,7 +132,7 @@ class MemoryDenseIndex:
             [int(i) for i in row[:count] if i != -1]
             for row, count in zip(ids, counts, strict=True)
         ]
-        return cast("list[int]", rankings)
+        return concresce.scatter(rankings)
 
 
 def _sparse_key(embedding: SparseEmbedding) -> int:
@@ -179,7 +179,7 @@ class MemorySparseIndex:
             len(keys),
             len(self._embeddings),
         )
-        return cast("int", keys)
+        return concresce.scatter(keys)
 
     @concresce.batch
     async def remove(self, key: int) -> None:
@@ -194,7 +194,7 @@ class MemorySparseIndex:
             len(keys),
             len(self._embeddings),
         )
-        return cast("None", [None] * len(keys))
+        return concresce.scatter([None] * len(keys))
 
     @concresce.batch
     async def similar(
@@ -217,7 +217,7 @@ class MemorySparseIndex:
             _top_sparse_keys(self._embeddings, query, count)
             for query, count in collected
         ]
-        return cast("list[int]", rankings)
+        return concresce.scatter(rankings)
 
 
 class FileSparseIndex:
@@ -261,7 +261,7 @@ class FileSparseIndex:
             len(keys),
             len(self._keys),
         )
-        return cast("int", keys)
+        return concresce.scatter(keys)
 
     @concresce.batch
     async def remove(self, key: int) -> None:
@@ -277,7 +277,7 @@ class FileSparseIndex:
             len(keys),
             len(self._keys),
         )
-        return cast("None", [None] * len(keys))
+        return concresce.scatter([None] * len(keys))
 
     @concresce.batch
     async def similar(
@@ -300,4 +300,4 @@ class FileSparseIndex:
         rankings = [
             _top_sparse_keys(embeddings, query, count) for query, count in collected
         ]
-        return cast("list[int]", rankings)
+        return concresce.scatter(rankings)

@@ -3,7 +3,7 @@
 import logging
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol
 
 import concresce
 from belljar import Jar
@@ -46,7 +46,7 @@ class CrossEncoderScorer:
             self.model_name,
         )
         scores = self.model.predict(pairs).tolist()
-        return cast("float", scores)
+        return concresce.scatter(scores)
 
     async def score(self, query: str, chunk: str) -> float:
         """Score a chunk based on its semantic similarity to the query."""

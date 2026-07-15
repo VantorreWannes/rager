@@ -289,11 +289,11 @@ wheels = [
 
 [[package]]
 name = "concresce"
-version = "0.1.1"
+version = "0.1.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a5/93/0f38ede3d9ce1e888f8aaaf94036ecc1cdd36e0cdff9cdb9510d85b2cf99/concresce-0.1.1.tar.gz", hash = "sha256:abe7c1b38c49c3cf64b3f4e5ac60d71b74b2c7fa1c9d8276cddaa8dbfa5628f2", size = 4976, upload-time = "2026-07-13T09:58:34.096Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/33/ac7d00efc427f4a6ca92b9e7405f5947498532bd0169d2ce5bc8be4283c7/concresce-0.1.2.tar.gz", hash = "sha256:ebf6e9e6a4d6d61d4a499c0e6ea9e0d71420c1b0a256c0277b0057322eef38f6", size = 6543, upload-time = "2026-07-14T21:04:47.448Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6d/4b/096dd6f8fd2e03f72df4f0ca16f907f2c46e826f75c188ed26fa5a664e77/concresce-0.1.1-py3-none-any.whl", hash = "sha256:92f8498cbc611892ce32932f10f8f777d7353c52623b4ad3e1435fc3ce6f5b3e", size = 5768, upload-time = "2026-07-13T09:58:33.009Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/36/79ae217d16e8240a7b96a8697c9b82bbd01e18a59f623952cabd5a277710/concresce-0.1.2-py3-none-any.whl", hash = "sha256:9ed8060d52f78e24572974ec8b78a81df23993bad56d66b627c76c812552a07c", size = 7401, upload-time = "2026-07-14T21:04:46.316Z" },
 ]
 
 [[package]]
@@ -1772,7 +1772,7 @@ wheels = [
 
 [[package]]
 name = "rager"
-version = "0.1.14"
+version = "0.1.15"
 source = { editable = "." }
 dependencies = [
     { name = "belljar" },
@@ -1811,7 +1811,7 @@ dev = [
 requires-dist = [
     { name = "belljar", specifier = ">=0.2.0" },
     { name = "blake3", specifier = ">=1.0.9" },
-    { name = "concresce", specifier = ">=0.1.1" },
+    { name = "concresce", specifier = ">=0.1.2" },
     { name = "faiss-cpu", specifier = ">=1.14.3" },
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "semantic-chunker", specifier = ">=0.2.0" },
@@ -2354,13 +2354,13 @@ resolution-markers = [
     "sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "filelock" },
-    { name = "fsspec" },
-    { name = "jinja2" },
-    { name = "networkx" },
-    { name = "setuptools" },
-    { name = "sympy" },
-    { name = "typing-extensions" },
+    { name = "filelock", marker = "sys_platform == 'darwin'" },
+    { name = "fsspec", marker = "sys_platform == 'darwin'" },
+    { name = "jinja2", marker = "sys_platform == 'darwin'" },
+    { name = "networkx", marker = "sys_platform == 'darwin'" },
+    { name = "setuptools", marker = "sys_platform == 'darwin'" },
+    { name = "sympy", marker = "sys_platform == 'darwin'" },
+    { name = "typing-extensions", marker = "sys_platform == 'darwin'" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.13.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:d849b390e07d8d333ce8ecaf91b273c656c598379a19c9acf1318a883f6b391c", upload-time = "2026-07-08T12:26:28Z" },
@@ -2375,13 +2375,13 @@ resolution-markers = [
     "sys_platform != 'darwin'",
 ]
 dependencies = [
-    { name = "filelock" },
-    { name = "fsspec" },
-    { name = "jinja2" },
-    { name = "networkx" },
-    { name = "setuptools" },
-    { name = "sympy" },
-    { name = "typing-extensions" },
+    { name = "filelock", marker = "sys_platform != 'darwin'" },
+    { name = "fsspec", marker = "sys_platform != 'darwin'" },
+    { name = "jinja2", marker = "sys_platform != 'darwin'" },
+    { name = "networkx", marker = "sys_platform != 'darwin'" },
+    { name = "setuptools", marker = "sys_platform != 'darwin'" },
+    { name = "sympy", marker = "sys_platform != 'darwin'" },
+    { name = "typing-extensions", marker = "sys_platform != 'darwin'" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.13.0%2Bcpu-cp314-cp314-linux_s390x.whl", hash = "sha256:dec241fef3984c0d1edadd1f58708e218d4eae881ceef7bc10cf9964d41b68b9", upload-time = "2026-07-08T19:30:20Z" },
@@ -2406,9 +2406,9 @@ resolution-markers = [
     "sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "numpy" },
-    { name = "pillow" },
-    { name = "torch", version = "2.13.0", source = { registry = "https://download.pytorch.org/whl/cpu" } },
+    { name = "numpy", marker = "sys_platform == 'darwin'" },
+    { name = "pillow", marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.13.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.28.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:3bd9dba55224a9db4a2d77f6feaa5651770d8c8e86d3d0ddb0fa6bec54c8712b", upload-time = "2026-07-08T12:26:40Z" },
@@ -2423,9 +2423,9 @@ resolution-markers = [
     "sys_platform != 'darwin'",
 ]
 dependencies = [
-    { name = "numpy" },
-    { name = "pillow" },
-    { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" } },
+    { name = "numpy", marker = "sys_platform != 'darwin'" },
+    { name = "pillow", marker = "sys_platform != 'darwin'" },
+    { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.28.0%2Bcpu-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:3a1a76c8decb1d7bbedd3588bccc90fb269944b7321a773db181735b42115422", upload-time = "2026-07-08T12:26:39Z" },

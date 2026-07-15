@@ -3,7 +3,7 @@
 import logging
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol
 
 import concresce
 from belljar import Jar
@@ -49,7 +49,7 @@ class SentenceTransformerDenseEmbedder:
             "Encoding batch of %d chunks with %r", len(chunks), self.model_name
         )
         embeddings = self.model.encode(chunks, normalize_embeddings=True).tolist()
-        return cast("DenseEmbedding", embeddings)
+        return concresce.scatter(embeddings)
 
     async def embed(self, chunk: str) -> DenseEmbedding:
         """Convert a text chunk into a vector representation."""
@@ -110,7 +110,7 @@ class SpladeSparseEmbedder:
         )
         coalesced = self.model.encode(chunks).coalesce()
         embeddings = self._coalesced_to_embeddings(coalesced, len(chunks))
-        return cast("SparseEmbedding", embeddings)
+        return concresce.scatter(embeddings)
 
     async def embed(self, chunk: str) -> SparseEmbedding:
         """Convert a text chunk into a sparse vector representation."""
