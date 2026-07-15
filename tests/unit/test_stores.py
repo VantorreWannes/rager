@@ -198,12 +198,27 @@ def test_file_store_set_overwrites_existing_key(
 def test_file_store_get_of_empty_value_returns_it(
     file_store: FileStore[int, bytes],
 ) -> None:
-    """get() returns a sealed empty buffer instead of treating it as a miss."""
+    """get() returns a sealed empty value instead of treating it as a miss."""
     # Act
     file_store.set(1, b"")
 
     # Assert
     assert file_store.get(1) == b""
+
+
+def test_file_store_with_embedding_values(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The store seals non-buffer values such as embedding-like tuples."""
+    # Arrange
+    monkeypatch.chdir(tmp_path)
+    store: FileStore[int, tuple[float, ...]] = FileStore()
+
+    # Act
+    store.set(1, (0.1, 0.2))
+
+    # Assert
+    assert store.get(1) == (0.1, 0.2)
 
 
 def test_file_store_same_value_under_different_keys(
