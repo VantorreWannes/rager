@@ -10,12 +10,7 @@ from rager.embedders import (
 )
 from rager.fusers import BordaCountFuser, Fuser, ReciprocalRankFuser
 from rager.generators import Generator, TransformersGenerator
-from rager.indexes import (
-    FileSparseIndex,
-    Index,
-    MemoryDenseIndex,
-    MemorySparseIndex,
-)
+from rager.indexes import FaissIndex, Index, SparseIndex
 from rager.parsers import (
     CsvFileParser,
     MarkdownFileParser,
@@ -36,15 +31,13 @@ __all__ = [
     "CsvFileParser",
     "DenseEmbedding",
     "Embedder",
-    "FileSparseIndex",
+    "FaissIndex",
     "FileStore",
     "Fuser",
     "Generator",
     "Hash",
     "Index",
     "MarkdownFileParser",
-    "MemoryDenseIndex",
-    "MemorySparseIndex",
     "MemoryStore",
     "Parser",
     "PdfFileParser",
@@ -53,6 +46,7 @@ __all__ = [
     "SemanticChunker",
     "SentenceTransformerDenseEmbedder",
     "SparseEmbedding",
+    "SparseIndex",
     "SpladeSparseEmbedder",
     "Store",
     "TransformersGenerator",

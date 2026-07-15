@@ -1,14 +1,13 @@
 """End-to-end hybrid retrieval-augmented generation with real models.
 
 Chunk a set of documents, embed each chunk with both a dense and a sparse
-model, index both, then answer a question by fusing the two rankings,
-reranking the fused candidates, and prompting a generator with the top chunk
-as context. Each stage is asserted independently so a regression in fusion,
-reranking, or generation is caught on its own.
+model, index both under a shared per-chunk key, then answer a question by
+fusing the two rankings, reranking the fused candidates, and prompting a
+generator with the top chunk as context. Each stage is asserted independently
+so a regression in fusion, reranking, or generation is caught on its own.
 
-Because the dense and sparse indexes derive keys from their own embeddings,
-the same chunk lands under two unrelated keys. The single chunk store is fed
-both keys per chunk so every fused key resolves back to its text.
+Because both indexes are keyed by the same chunk id, every fused key resolves
+back to its text through a single chunk store.
 """
 
 import asyncio
@@ -19,7 +18,7 @@ from rager.chunkers import SemanticChunker
 from rager.embedders import SentenceTransformerDenseEmbedder, SpladeSparseEmbedder
 from rager.fusers import ReciprocalRankFuser
 from rager.generators import TransformersGenerator
-from rager.indexes import MemoryDenseIndex, MemorySparseIndex
+from rager.indexes import FaissIndex, SparseIndex
 from rager.scorers import CrossEncoderScorer
 from rager.stores import MemoryStore
 
@@ -40,22 +39,24 @@ async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
     chunker = SemanticChunker()
     dense_embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
     sparse_embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
-    dense_index = MemoryDenseIndex(384)
-    sparse_index = MemorySparseIndex()
+    dense_index: FaissIndex[int, list[float]] = FaissIndex(384, MemoryStore())
+    sparse_index: SparseIndex[int] = SparseIndex(MemoryStore(), MemoryStore())
     chunks: MemoryStore[int, str] = MemoryStore()
     fuser: ReciprocalRankFuser[int] = ReciprocalRankFuser()
     scorer = CrossEncoderScorer("cross-encoder/ms-marco-MiniLM-L6-v2")
     generator = TransformersGenerator(
         "HuggingFaceTB/SmolLM2-135M-Instruct", max_new_tokens=32
     )
+    identifier = 0
     for document in DOCUMENTS:
         for chunk in chunker.chunks(document):
-            dense_key, sparse_key = await asyncio.gather(
-                dense_index.add(await dense_embedder.embed(chunk)),
-                sparse_index.add(await sparse_embedder.embed(chunk)),
+            dense, sparse = await asyncio.gather(
+                dense_embedder.embed(chunk), sparse_embedder.embed(chunk)
             )
-            chunks.set(dense_key, chunk)
-            chunks.set(sparse_key, chunk)
+            dense_index[identifier] = dense
+            sparse_index[identifier] = sparse
+            chunks.set(identifier, chunk)
+            identifier += 1
 
     # Act
     query = "Why do cats purr?"

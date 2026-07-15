@@ -7,11 +7,11 @@ import blake3
 import pytest
 
 from rager.fusers import ReciprocalRankFuser
-from rager.indexes import MemoryDenseIndex, MemorySparseIndex
+from rager.indexes import FaissIndex, SparseIndex
 from rager.stores import MemoryStore
 
 if TYPE_CHECKING:
-    from rager.types import Hash
+    from rager.types import DenseEmbedding, Hash, SparseEmbedding
 
 pytestmark = pytest.mark.integration
 
@@ -24,7 +24,7 @@ class ChunkMetadata:
     file_id: Hash
 
 
-def _chunks(store: MemoryStore[int, ChunkMetadata], keys: list[int]) -> list[str]:
+def _chunks(store: MemoryStore[str, ChunkMetadata], keys: list[str]) -> list[str]:
     """Resolve index keys to their chunk texts."""
     return [metadata.chunk for key in keys if (metadata := store.get(key)) is not None]
 
@@ -32,18 +32,18 @@ def _chunks(store: MemoryStore[int, ChunkMetadata], keys: list[int]) -> list[str
 @pytest.mark.asyncio
 async def test_reciprocal_rank_fuser_fuses_dense_and_sparse_retrieval() -> None:
     """Chunks retrieved from dense and sparse indexes fuse into one ranking."""
-    dense_index = MemoryDenseIndex(3)
-    sparse_index = MemorySparseIndex()
-    store: MemoryStore[int, ChunkMetadata] = MemoryStore()
+    dense_index: FaissIndex[str, DenseEmbedding] = FaissIndex(3, MemoryStore())
+    sparse_index: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
+    store: MemoryStore[str, ChunkMetadata] = MemoryStore()
     file_id = blake3.blake3(b"a file")
-    embeddings = {
+    embeddings: dict[str, tuple[DenseEmbedding, SparseEmbedding]] = {
         "apple": ([1.0, 0.0, 0.0], {1: 1.0}),
         "banana": ([0.0, 1.0, 0.0], {2: 1.0}),
     }
     for chunk, (dense, sparse) in embeddings.items():
-        metadata = ChunkMetadata(chunk=chunk, file_id=file_id)
-        store.set(await dense_index.add(dense), metadata)
-        store.set(await sparse_index.add(sparse), metadata)
+        dense_index[chunk] = dense
+        sparse_index[chunk] = sparse
+        store.set(chunk, ChunkMetadata(chunk=chunk, file_id=file_id))
     fuser: ReciprocalRankFuser[str] = ReciprocalRankFuser()
 
     dense_keys = await dense_index.similar([0.9, 0.1, 0.0])

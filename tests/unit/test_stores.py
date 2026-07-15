@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import blake3
 import pytest
 
-from rager.stores import FileStore, MemoryStore
+from rager.stores import BaseStore, FileStore, MemoryStore
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -31,6 +31,13 @@ class ChunkMetadata:
 
     chunk: str
     file_id: Hash
+
+
+def test_base_store_is_abstract() -> None:
+    """BaseStore cannot be instantiated without the four core operations."""
+    # Act & Assert
+    with pytest.raises(TypeError):
+        BaseStore()  # type: ignore[abstract]
 
 
 def test_memory_store_add_and_get() -> None:
@@ -130,6 +137,38 @@ def test_memory_store_with_hash_keys_and_metadata_values() -> None:
 
     # Assert
     assert store.get(key) is metadata
+
+
+def test_memory_store_inherits_container_helpers() -> None:
+    """The helpers derived from the four core operations behave as expected."""
+    # Arrange
+    store: MemoryStore[int, str] = MemoryStore()
+    absent_key = 3
+    expected_len = 2
+
+    # Act & Assert
+    assert not store
+    store.set(1, "a chunk")
+    store.set(2, "another chunk")
+    assert store
+    assert 1 in store
+    assert absent_key not in store
+    assert len(store) == expected_len
+    assert sorted(store) == [1, 2]
+
+
+def test_memory_store_clear_removes_every_key() -> None:
+    """clear() empties the store."""
+    # Arrange
+    store: MemoryStore[int, str] = MemoryStore()
+    store.set(1, "a chunk")
+    store.set(2, "another chunk")
+
+    # Act
+    store.clear()
+
+    # Assert
+    assert store.keys() == []
 
 
 def test_file_store_set_and_get(file_store: FileStore[int, bytes]) -> None:

@@ -13,7 +13,7 @@ import pytest
 
 from rager.chunkers import SemanticChunker
 from rager.embedders import SentenceTransformerDenseEmbedder
-from rager.indexes import MemoryDenseIndex
+from rager.indexes import FaissIndex
 from rager.parsers import CsvFileParser, MarkdownFileParser, PdfFileParser
 from rager.stores import MemoryStore
 
@@ -43,19 +43,19 @@ async def test_file_ingestion_round_trips(
     # Arrange
     file: Path = request.getfixturevalue(file_fixture)
     embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
-    index = MemoryDenseIndex(384)
+    index: FaissIndex[int, list[float]] = FaissIndex(384, MemoryStore())
     chunks: MemoryStore[int, str] = MemoryStore()
     ingested: list[str] = []
     for unit in parser().units(file):
         for chunk in SemanticChunker().chunks(unit):
-            key = await index.add(await embedder.embed(chunk))
-            chunks.set(key, chunk)
+            index[len(ingested)] = await embedder.embed(chunk)
+            chunks.set(len(ingested), chunk)
             ingested.append(chunk)
 
     # Act
     assert ingested, "the sample file produced no chunks to ingest"
     target = max(ingested, key=len)
-    (key,) = await index.similar(await embedder.embed(target), results=1)
+    (key,) = await index.similar(await embedder.embed(target), embedding_results=1)
 
     # Assert
     assert chunks.get(key) == target
