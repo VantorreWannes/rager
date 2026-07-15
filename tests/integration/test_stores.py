@@ -29,7 +29,7 @@ async def test_memory_store_resolves_dense_index_keys_to_embeddings() -> None:
     index: FaissIndex[str, DenseEmbedding] = FaissIndex(3, MemoryStore())
     store: MemoryStore[str, DenseEmbedding] = MemoryStore()
     embedding = [1.0, 0.0, 0.0]
-    index["chunk"] = embedding
+    await index.set("chunk", embedding)
     store.set("chunk", embedding)
 
     (key,) = await index.similar([0.9, 0.1, 0.0])
@@ -43,7 +43,7 @@ async def test_memory_store_resolves_sparse_index_keys_to_embeddings() -> None:
     index: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
     store: MemoryStore[str, SparseEmbedding] = MemoryStore()
     embedding = {1: 1.0, 2: 0.5}
-    index["chunk"] = embedding
+    await index.set("chunk", embedding)
     store.set("chunk", embedding)
 
     (key,) = await index.similar({1: 0.5})
@@ -56,7 +56,7 @@ async def test_memory_store_resolves_dense_index_keys_to_chunks() -> None:
     """Keys returned by a dense index resolve back to stored chunk text."""
     index: FaissIndex[str, DenseEmbedding] = FaissIndex(3, MemoryStore())
     store: MemoryStore[str, str] = MemoryStore()
-    index["chunk"] = [1.0, 0.0, 0.0]
+    await index.set("chunk", [1.0, 0.0, 0.0])
     store.set("chunk", "a chunk")
 
     (key,) = await index.similar([0.9, 0.1, 0.0])
@@ -70,7 +70,7 @@ async def test_memory_store_resolves_dense_index_keys_to_metadata() -> None:
     index: FaissIndex[str, DenseEmbedding] = FaissIndex(3, MemoryStore())
     store: MemoryStore[str, ChunkMetadata] = MemoryStore()
     metadata = ChunkMetadata(chunk="a chunk", file_id=blake3.blake3(b"a file"))
-    index["chunk"] = [1.0, 0.0, 0.0]
+    await index.set("chunk", [1.0, 0.0, 0.0])
     store.set("chunk", metadata)
 
     (key,) = await index.similar([0.9, 0.1, 0.0])

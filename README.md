@@ -31,7 +31,7 @@ generator = TransformersGenerator()
 key = 0
 for document in documents:
     for chunk in chunker.chunks(document):
-        index[key] = await embedder.embed(chunk)
+        await index.set(key, await embedder.embed(chunk))
         chunks[key] = chunk
         key += 1
 
