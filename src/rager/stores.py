@@ -1,9 +1,9 @@
 """Key-value store protocol definitions."""
 
 import logging
-from collections.abc import Hashable
+from collections.abc import Generator, Hashable
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 import dill
 from belljar import Jar
@@ -15,21 +15,57 @@ logger = logging.getLogger(__name__)
 class Store[K: Hashable, V: Hashable](Protocol):
     """Protocol for a key-value store mapping keys of type K to values of type V."""
 
-    def set(self, key: K, value: V) -> None:
-        """Store a value with the given key."""
+    def keys(self) -> list[K]:
+        """Iterate over the keys in the store."""
         ...
 
     def get(self, key: K) -> V | None:
-        """Retrieve a value by its key."""
-        ...
+        """Retrieve a value by its key, or None if the key is not present."""
+        if key in self:
+            return self[key]
+        return None
+
+    def set(self, key: K, value: V) -> None:
+        """Store a value with the given key."""
+        self[key] = value
 
     def remove(self, key: K) -> None:
         """Remove a value by its key."""
+        if key in self:
+            del self[key]
+
+    def clear(self) -> None:
+        """Remove all values from the store."""
+        for key in self.keys():
+            del self[key]
+
+    def __setitem__(self, key: K, value: V) -> None:
+        """Store a value with the given key."""
         ...
 
-    def keys(self) -> list[K]:
-        """Return all keys in the store."""
+    def __getitem__(self, key: K) -> V:
+        """Retrieve a value by its key."""
         ...
+
+    def __delitem__(self, key: K) -> None:
+        """Remove a value by its key."""
+        ...
+
+    def __contains__(self, key: K) -> bool:
+        """Check if a key is in the store."""
+        return key in self.keys()
+
+    def __len__(self) -> int:
+        """Return the number of keys in the store."""
+        return len(self.keys())
+
+    def __iter__(self) -> Generator[K]:
+        """Iterate over the keys in the store."""
+        yield from self.keys()
+
+    def __bool__(self) -> bool:
+        """Check if the store is non-empty."""
+        return len(self) > 0
 
 
 class MemoryStore[K: Hashable, V: Hashable]:
@@ -39,74 +75,67 @@ class MemoryStore[K: Hashable, V: Hashable]:
         """Initialize the store with no values."""
         self._map: dict[K, V] = {}
 
-    def set(self, key: K, value: V) -> None:
+    def keys(self) -> list[K]:
+        """Return the keys in the store."""
+        return list(self._map.keys())
+
+    def __setitem__(self, key: K, value: V) -> None:
         """Store a value with the given key."""
         logger.debug("Storing value for key %r", key)
         self._map[key] = value
 
-    def get(self, key: K) -> V | None:
-        """Retrieve an embedding by its key."""
-        value = self._map.get(key)
-        if value is None:
-            logger.debug("No value stored for key %r", key)
-        return value
+    def __getitem__(self, key: K) -> V:
+        """Retrieve a value by its key."""
+        logger.debug("Retrieving value for key %r", key)
+        return self._map[key]
 
-    def remove(self, key: K) -> None:
+    def __delitem__(self, key: K) -> None:
         """Remove a value by its key."""
         logger.debug("Removing value for key %r", key)
-        self._map.pop(key, None)
-
-    def keys(self) -> list[K]:
-        """Return all keys in the store."""
-        return list(self._map.keys())
+        del self._map[key]
 
 
 class FileStore[K: Hashable, V: Hashable]:
-    """JAR-based key-value store mapping index keys to values.
-
-    Values are sealed on disk in a JAR, so only keys and digests stay in memory.
-    """
+    """File-based store mapping index keys to values."""
 
     def __init__(self) -> None:
-        """Initialize the store with no values."""
-        self._map: dict[K, str] = {}
-
-    def _digest(self, value: V) -> str:
-        """Compute the digest for the given value."""
-        return blake3(dill.dumps(value)).hexdigest()
+        """Initialize FileStore."""
+        self._key_map: dict[K, str] = {}
 
     def _jar(self, key: K, digest: str) -> Jar[V]:
         """Open a jar positioned at the identity of the given key and digest."""
         jar = Jar[V](Path(".jar/stores"))
-        jar.include(self.set.__code__)
-        jar.include(self.get.__code__)
+        jar.include(self.keys.__code__)
+        jar.include(self.__setitem__.__code__)
+        jar.include(self.__getitem__.__code__)
+        jar.include(self.__delitem__.__code__)
+        jar.include(self._jar.__code__)
         jar.include(key)
         jar.include(digest)
         return jar
 
-    def set(self, key: K, value: V) -> None:
-        """Store a value with the given key."""
-        logger.debug("Storing value for key %r", key)
-        digest = self._digest(value)
-        self._jar(key, digest).set(value)
-        self._map[key] = digest
-
-    def get(self, key: K) -> V | None:
-        """Retrieve a value by its key."""
-        digest = self._map.get(key)
-        if digest is None:
-            logger.debug("No value stored for key %r", key)
-            return None
-        value = self._jar(key, digest).get()
-        if value is None:
-            logger.debug("No value found in JAR for key %r", key)
-        return value
-
-    def remove(self, key: K) -> None:
-        """Remove a value by its key."""
-        logger.debug("Removing value for key %r", key)
-        self._map.pop(key, None)
+    def _digest(self, key: K) -> str:
+        """Return the digest of the given key."""
+        return blake3(dill.dumps(key)).hexdigest()
 
     def keys(self) -> list[K]:
-        """Return all keys in the store."""
-        return list(self._map.keys())
+        """Return the keys in the store."""
+        return list(self._key_map.keys())
+
+    def __setitem__(self, key: K, value: V) -> None:
+        """Store a value with the given key."""
+        logger.debug("Storing value for key %r", key)
+        digest = self._digest(key)
+        self._jar(key, digest).set(value)
+        self._key_map[key] = digest
+
+    def __getitem__(self, key: K) -> V:
+        """Retrieve a value by its key."""
+        logger.debug("Retrieving value for key %r", key)
+        digest = self._key_map[key]
+        return cast("V", self._jar(key, digest).get())
+
+    def __delitem__(self, key: K) -> None:
+        """Delete a value by its key."""
+        logger.debug("Deleting value for key %r", key)
+        del self._key_map[key]
