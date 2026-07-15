@@ -1,19 +1,14 @@
 """Unit tests for indexes."""
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-from rager.indexes import (
-    FileSparseIndex,
-    MemoryDenseIndex,
-    MemorySparseIndex,
-    _sparse_key,
-    _sparse_score,
-)
+from rager.indexes import FaissIndex, SparseIndex, _scores, _top_keys
+from rager.stores import FileStore, MemoryStore
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -22,230 +17,242 @@ pytestmark = pytest.mark.unit
 
 
 @pytest.fixture
-def file_index(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FileSparseIndex:
-    """Return a FileSparseIndex whose jar directory lives under a temporary path."""
+def dense_index(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> FaissIndex[str, list[float]]:
+    """Return a FaissIndex whose jar directory lives under a temporary path."""
     monkeypatch.chdir(tmp_path)
-    return FileSparseIndex()
+    return FaissIndex(3, MemoryStore())
 
 
-@patch("rager.indexes.faiss")
-def test_dense_index_init_defers_index_creation(faiss: MagicMock) -> None:
-    """__init__() records the dimension but builds no FAISS index yet."""
-    # Arrange
-    dimensions = 3
+@pytest.fixture
+def sparse_index() -> SparseIndex[str]:
+    """Return a SparseIndex backed by in-memory stores."""
+    return SparseIndex(MemoryStore(), MemoryStore())
 
+
+# --- FaissIndex, real FAISS -------------------------------------------------
+
+
+def test_faiss_index_id_is_deterministic() -> None:
+    """_id() derives the same int64 id for the same key content."""
     # Act
-    index = MemoryDenseIndex(dimensions)
+    key = FaissIndex._id("x")
 
     # Assert
-    faiss.IndexFlatIP.assert_not_called()
-    faiss.IndexIDMap.assert_not_called()
-    assert index.dimensions == dimensions
-
-
-@patch("rager.indexes.faiss")
-@pytest.mark.asyncio
-async def test_dense_index_infers_dimensions_on_first_add(faiss: MagicMock) -> None:
-    """The first add() builds a FAISS index sized to the embedding width."""
-    # Arrange
-    dimensions = 3
-    index = MemoryDenseIndex()
-
-    # Act
-    await index.add([0.1, 0.2, 0.3])
-
-    # Assert
-    faiss.IndexFlatIP.assert_called_once_with(dimensions)
-    faiss.IndexIDMap.assert_called_once_with(faiss.IndexFlatIP.return_value)
-    assert index.dimensions == dimensions
-
-
-@patch("rager.indexes.faiss")
-@pytest.mark.asyncio
-async def test_dense_index_rejects_mismatched_dimensions(faiss: MagicMock) -> None:
-    """add() rejects an embedding whose width differs from the fixed dimension."""
-    # Arrange
-    index = MemoryDenseIndex(3)
-
-    # Act & Assert
-    with pytest.raises(ValueError, match="4 dimensions"):
-        await index.add([0.1, 0.2, 0.3, 0.4])
-    faiss.IndexIDMap.assert_not_called()
-
-
-def test_dense_index_to_rows() -> None:
-    """_to_rows() converts embeddings into a float32 matrix."""
-    # Act
-    rows = MemoryDenseIndex._to_rows([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
-
-    # Assert
-    assert rows.shape == (2, 3)
-    assert rows.dtype == np.float32
-
-
-def test_dense_index_key_is_deterministic() -> None:
-    """_key() derives the same int64 key for the same embedding content."""
-    # Arrange
-    row, other = MemoryDenseIndex._to_rows([[0.1, 0.2, 0.3], [0.3, 0.2, 0.1]])
-
-    # Act
-    key = MemoryDenseIndex._key(row)
-
-    # Assert
-    assert key == MemoryDenseIndex._key(row)
-    assert key != MemoryDenseIndex._key(other)
+    assert key == FaissIndex._id("x")
+    assert key != FaissIndex._id("y")
     assert np.asarray([key], dtype=np.int64)[0] == key
 
 
-@patch("rager.indexes.faiss")
-@pytest.mark.asyncio
-async def test_dense_index_add(faiss: MagicMock) -> None:
-    """add() removes any previous entry, adds the row, and returns its key."""
-    # Arrange
-    index = MemoryDenseIndex(3)
-    faiss_index = faiss.IndexIDMap.return_value
-    embedding = [0.1, 0.2, 0.3]
-    expected_key = MemoryDenseIndex._key(MemoryDenseIndex._to_rows([embedding])[0])
+def test_faiss_index_rejects_mismatched_dimensions(
+    dense_index: FaissIndex[str, list[float]],
+) -> None:
+    """Storing an embedding whose width differs from the fixed dimension fails."""
+    # Act & Assert
+    with pytest.raises(ValueError, match="4 dimensions"):
+        dense_index["x"] = [0.1, 0.2, 0.3, 0.4]
 
+
+@pytest.mark.asyncio
+async def test_faiss_index_getitem_returns_stored_embedding(
+    dense_index: FaissIndex[str, list[float]],
+) -> None:
+    """__getitem__() returns the embedding sealed under the key."""
     # Act
-    key = await index.add(embedding)
+    dense_index["x"] = [1.0, 0.0, 0.0]
 
     # Assert
-    assert key == expected_key
+    assert dense_index["x"] == [1.0, 0.0, 0.0]
+
+
+@pytest.mark.asyncio
+async def test_faiss_index_delegates_keys_and_ids_to_key_map(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The injected key map records the FAISS id for every stored key."""
+    # Arrange
+    monkeypatch.chdir(tmp_path)
+    key_map: MemoryStore[str, int] = MemoryStore()
+    index: FaissIndex[str, list[float]] = FaissIndex(3, key_map)
+
+    # Act
+    index["x"] = [1.0, 0.0, 0.0]
+
+    # Assert
+    assert key_map.get("x") == FaissIndex._id("x")
+    assert index.keys() == ["x"]
+
+
+@pytest.mark.asyncio
+async def test_faiss_index_similar_ranks_nearest_first(
+    dense_index: FaissIndex[str, list[float]],
+) -> None:
+    """similar() returns keys ordered by inner-product similarity."""
+    # Arrange
+    dense_index["x"] = [1.0, 0.0, 0.0]
+    dense_index["y"] = [0.0, 1.0, 0.0]
+    dense_index["z"] = [0.0, 0.0, 1.0]
+
+    # Act & Assert
+    assert await dense_index.similar([0.9, 0.4, 0.1], embedding_results=3) == [
+        "x",
+        "y",
+        "z",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_faiss_index_similar_caps_results(
+    dense_index: FaissIndex[str, list[float]],
+) -> None:
+    """similar() returns at most the requested number of results."""
+    # Arrange
+    dense_index["x"] = [1.0, 0.0, 0.0]
+    dense_index["y"] = [0.9, 0.1, 0.0]
+
+    # Act & Assert
+    assert await dense_index.similar([1.0, 0.0, 0.0], embedding_results=1) == ["x"]
+
+
+@pytest.mark.asyncio
+async def test_faiss_index_similar_on_empty_index(
+    dense_index: FaissIndex[str, list[float]],
+) -> None:
+    """similar() on an index with no embeddings returns no keys."""
+    # Act & Assert
+    assert await dense_index.similar([1.0, 0.0, 0.0]) == []
+
+
+@pytest.mark.asyncio
+async def test_faiss_index_overwrite_reuses_the_key_slot(
+    dense_index: FaissIndex[str, list[float]],
+) -> None:
+    """Restoring a key replaces its embedding without growing the index."""
+    # Act
+    dense_index["x"] = [1.0, 0.0, 0.0]
+    dense_index["x"] = [0.0, 1.0, 0.0]
+
+    # Assert
+    assert dense_index.index.ntotal == 1
+    assert dense_index["x"] == [0.0, 1.0, 0.0]
+    assert await dense_index.similar([0.0, 1.0, 0.0], embedding_results=1) == ["x"]
+
+
+@pytest.mark.asyncio
+async def test_faiss_index_delitem_drops_key_from_results(
+    dense_index: FaissIndex[str, list[float]],
+) -> None:
+    """A removed key no longer appears in similarity results."""
+    # Arrange
+    dense_index["x"] = [1.0, 0.0, 0.0]
+    dense_index["y"] = [0.0, 1.0, 0.0]
+
+    # Act
+    del dense_index["x"]
+
+    # Assert
+    assert dense_index.keys() == ["y"]
+    assert await dense_index.similar([1.0, 0.0, 0.0], embedding_results=2) == ["y"]
+
+
+@pytest.mark.asyncio
+async def test_faiss_index_can_use_a_file_backed_key_map(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A FileStore serves as the key map, sealing the mapping on disk."""
+    # Arrange
+    monkeypatch.chdir(tmp_path)
+    index: FaissIndex[str, list[float]] = FaissIndex(3, FileStore())
+
+    # Act
+    index["x"] = [1.0, 0.0, 0.0]
+    index["y"] = [0.0, 1.0, 0.0]
+
+    # Assert
+    assert await index.similar([1.0, 0.1, 0.0], embedding_results=2) == ["x", "y"]
+
+
+# --- FaissIndex, mocked FAISS wiring ----------------------------------------
+
+
+@patch("rager.indexes.faiss")
+def test_faiss_index_init_builds_the_index(faiss: MagicMock) -> None:
+    """__init__() builds an id-mapped inner-product index of the given width."""
+    # Act
+    index: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
+
+    # Assert
+    faiss.IndexFlatIP.assert_called_once_with(3)
+    faiss.IndexIDMap.assert_called_once_with(faiss.IndexFlatIP.return_value)
+    assert index.index is faiss.IndexIDMap.return_value
+
+
+@patch("rager.indexes.faiss")
+def test_faiss_index_setitem_dedups_then_adds(
+    faiss: MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """__setitem__() removes any previous entry, then adds the row under its id."""
+    # Arrange
+    monkeypatch.chdir(tmp_path)
+    index: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
+    faiss_index = faiss.IndexIDMap.return_value
+
+    # Act
+    index["x"] = [0.1, 0.2, 0.3]
+
+    # Assert
     faiss.IDSelectorBatch.assert_called_once()
     faiss_index.remove_ids.assert_called_once_with(faiss.IDSelectorBatch.return_value)
     rows, ids = faiss_index.add_with_ids.call_args.args
-    np.testing.assert_array_equal(rows, MemoryDenseIndex._to_rows([embedding]))
-    np.testing.assert_array_equal(ids, np.asarray([expected_key], dtype=np.int64))
+    np.testing.assert_array_equal(rows, np.asarray([[0.1, 0.2, 0.3]], dtype=np.float32))
+    np.testing.assert_array_equal(ids, np.asarray([FaissIndex._id("x")], np.int64))
 
 
 @patch("rager.indexes.faiss")
 @pytest.mark.asyncio
-async def test_dense_index_add_batches_concurrent_calls(faiss: MagicMock) -> None:
-    """Concurrent add() calls coalesce into one deduplicated FAISS call."""
+async def test_faiss_index_similar_coalesces_concurrent_queries(
+    faiss: MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Concurrent similar() calls share one search, each trimmed to its own count."""
     # Arrange
-    index = MemoryDenseIndex(3)
+    monkeypatch.chdir(tmp_path)
+    index: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
     faiss_index = faiss.IndexIDMap.return_value
-    first = [1.0, 0.0, 0.0]
-    second = [0.0, 1.0, 0.0]
-
-    # Act
-    keys = await asyncio.gather(index.add(first), index.add(second), index.add(first))
-
-    # Assert
-    assert keys[0] == keys[2]
-    assert keys[0] != keys[1]
-    faiss_index.add_with_ids.assert_called_once()
-    rows, ids = faiss_index.add_with_ids.call_args.args
-    np.testing.assert_array_equal(rows, MemoryDenseIndex._to_rows([first, second]))
-    np.testing.assert_array_equal(ids, np.asarray(keys[:2], dtype=np.int64))
-
-
-@patch("rager.indexes.faiss")
-@pytest.mark.asyncio
-async def test_dense_index_does_not_batch_across_instances(faiss: MagicMock) -> None:
-    """Concurrent add() calls on different indexes stay in separate batches."""
-    # Arrange
-    first = MemoryDenseIndex(3)
-    second = MemoryDenseIndex(3)
-    faiss_index = faiss.IndexIDMap.return_value
-
-    # Act
-    await asyncio.gather(first.add([1.0, 0.0, 0.0]), second.add([0.0, 1.0, 0.0]))
-
-    # Assert
-    expected_calls = 2
-    assert faiss_index.add_with_ids.call_count == expected_calls
-
-
-@patch("rager.indexes.faiss")
-@pytest.mark.asyncio
-async def test_dense_index_remove(faiss: MagicMock) -> None:
-    """remove() removes the entry matching the given key."""
-    # Arrange
-    index = MemoryDenseIndex(3)
-    await index.add([0.1, 0.2, 0.3])
-    faiss_index = faiss.IndexIDMap.return_value
-    faiss_index.remove_ids.reset_mock()
-    faiss.IDSelectorBatch.reset_mock()
-
-    # Act
-    await index.remove(42)
-
-    # Assert
-    selector_ids = faiss.IDSelectorBatch.call_args.args[0]
-    np.testing.assert_array_equal(selector_ids, np.asarray([42], dtype=np.int64))
-    faiss_index.remove_ids.assert_called_once_with(faiss.IDSelectorBatch.return_value)
-
-
-@patch("rager.indexes.faiss")
-@pytest.mark.asyncio
-async def test_dense_index_remove_on_empty_index_is_noop(faiss: MagicMock) -> None:
-    """remove() before any add touches no FAISS index."""
-    # Arrange
-    index = MemoryDenseIndex(3)
-
-    # Act
-    await index.remove(42)
-
-    # Assert
-    faiss.IndexIDMap.assert_not_called()
-    faiss.IDSelectorBatch.assert_not_called()
-
-
-@patch("rager.indexes.faiss")
-@pytest.mark.asyncio
-async def test_dense_index_remove_batches_concurrent_calls(faiss: MagicMock) -> None:
-    """Concurrent remove() calls coalesce into one FAISS call."""
-    # Arrange
-    index = MemoryDenseIndex(3)
-    await index.add([0.1, 0.2, 0.3])
-    faiss_index = faiss.IndexIDMap.return_value
-    faiss_index.remove_ids.reset_mock()
-    faiss.IDSelectorBatch.reset_mock()
-
-    # Act
-    await asyncio.gather(index.remove(1), index.remove(2))
-
-    # Assert
-    selector_ids = faiss.IDSelectorBatch.call_args.args[0]
-    np.testing.assert_array_equal(selector_ids, np.asarray([1, 2], dtype=np.int64))
-    faiss_index.remove_ids.assert_called_once_with(faiss.IDSelectorBatch.return_value)
-
-
-@patch("rager.indexes.faiss")
-@pytest.mark.asyncio
-async def test_dense_index_similar(faiss: MagicMock) -> None:
-    """similar() searches with the requested count and drops -1 padding ids."""
-    # Arrange
-    expected_results = 4
-    index = MemoryDenseIndex(3)
-    await index.add([0.0, 0.0, 0.0])
-    faiss_index = faiss.IndexIDMap.return_value
+    faiss_index.ntotal = 2
+    index["x"] = [1.0, 0.0, 0.0]
+    index["y"] = [0.0, 1.0, 0.0]
+    x, y = FaissIndex._id("x"), FaissIndex._id("y")
     faiss_index.search.return_value = (
-        np.asarray([[0.9, 0.5, -1.0, -1.0]], dtype=np.float32),
-        np.asarray([[7, 3, -1, -1]], dtype=np.int64),
+        np.asarray([[0.9, 0.5], [0.8, -1.0]], dtype=np.float32),
+        np.asarray([[x, y], [y, -1]], dtype=np.int64),
     )
 
     # Act
-    result = await index.similar([0.1, 0.2, 0.3], results=expected_results)
+    first, second = await asyncio.gather(
+        index.similar([1.0, 0.0, 0.0], embedding_results=2),
+        index.similar([0.0, 1.0, 0.0], embedding_results=2),
+    )
 
     # Assert
-    query, results = faiss_index.search.call_args.args
-    np.testing.assert_array_equal(query, MemoryDenseIndex._to_rows([[0.1, 0.2, 0.3]]))
-    assert results == expected_results
-    assert result == [7, 3]
+    faiss_index.search.assert_called_once()
+    assert first == ["x", "y"]
+    assert second == ["y"]
 
 
 @patch("rager.indexes.faiss")
 @pytest.mark.asyncio
-async def test_dense_index_similar_on_empty_index(faiss: MagicMock) -> None:
-    """similar() before any add returns no keys without searching."""
+async def test_faiss_index_similar_on_empty_index_does_not_search(
+    faiss: MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """similar() skips the FAISS search when the index holds nothing."""
     # Arrange
-    index = MemoryDenseIndex(3)
+    monkeypatch.chdir(tmp_path)
+    index: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
+    faiss.IndexIDMap.return_value.ntotal = 0
 
     # Act
-    result = await index.similar([0.1, 0.2, 0.3])
+    result = await index.similar([1.0, 0.0, 0.0])
 
     # Assert
     assert result == []
@@ -254,381 +261,261 @@ async def test_dense_index_similar_on_empty_index(faiss: MagicMock) -> None:
 
 @patch("rager.indexes.faiss")
 @pytest.mark.asyncio
-async def test_dense_index_similar_scatters_concurrent_queries(
-    faiss: MagicMock,
+async def test_faiss_index_does_not_batch_across_instances(
+    faiss: MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Concurrent similar() calls share one search, each trimmed to its own count."""
+    """Concurrent similar() calls on different indexes each run their own search."""
     # Arrange
-    index = MemoryDenseIndex(3)
-    await index.add([0.0, 0.0, 0.0])
+    monkeypatch.chdir(tmp_path)
+    first: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
+    second: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
     faiss_index = faiss.IndexIDMap.return_value
+    faiss_index.ntotal = 1
+    first["x"] = [1.0, 0.0, 0.0]
+    second["y"] = [0.0, 1.0, 0.0]
     faiss_index.search.return_value = (
-        np.asarray([[0.9, 0.5], [0.8, -1.0]], dtype=np.float32),
-        np.asarray([[7, 3], [5, -1]], dtype=np.int64),
+        np.asarray([[0.9]], dtype=np.float32),
+        np.asarray([[FaissIndex._id("x")]], dtype=np.int64),
     )
 
     # Act
-    first, second = await asyncio.gather(
-        index.similar([1.0, 0.0, 0.0], results=2),
-        index.similar([0.0, 1.0, 0.0], results=2),
+    await asyncio.gather(
+        first.similar([1.0, 0.0, 0.0], embedding_results=1),
+        second.similar([0.0, 1.0, 0.0], embedding_results=1),
     )
 
     # Assert
-    faiss_index.search.assert_called_once()
-    assert first == [7, 3]
-    assert second == [5]
+    expected_searches = 2
+    assert faiss_index.search.call_count == expected_searches
 
 
-@patch("rager.indexes.faiss")
-@pytest.mark.asyncio
-async def test_dense_index_similar_trims_each_query_to_its_own_count(
-    faiss: MagicMock,
-) -> None:
-    """A batched search uses the largest count, then trims per query."""
+# --- SparseIndex ------------------------------------------------------------
+
+
+class _CountingTokenStore(MemoryStore[int, dict[str, float]]):
+    """A token store that records which tokens are read from disk."""
+
+    def __init__(self) -> None:
+        """Initialize the store with an empty read log."""
+        super().__init__()
+        self.reads: list[int] = []
+
+    @override
+    def __getitem__(self, key: int) -> dict[str, float]:
+        """Record the read and delegate to the in-memory map."""
+        self.reads.append(key)
+        return super().__getitem__(key)
+
+
+def test_scores_accumulates_shared_token_weights() -> None:
+    """_scores() sums the weight products across every token of the query."""
     # Arrange
-    larger_count = 3
-    index = MemoryDenseIndex(3)
-    await index.add([0.0, 0.0, 0.0])
-    faiss_index = faiss.IndexIDMap.return_value
-    faiss_index.search.return_value = (
-        np.asarray([[0.9, 0.5, 0.4], [0.8, 0.3, 0.2]], dtype=np.float32),
-        np.asarray([[7, 3, 1], [5, 8, 2]], dtype=np.int64),
-    )
-
-    # Act
-    first, second = await asyncio.gather(
-        index.similar([1.0, 0.0, 0.0], results=1),
-        index.similar([0.0, 1.0, 0.0], results=larger_count),
-    )
-
-    # Assert
-    _, results = faiss_index.search.call_args.args
-    assert results == larger_count
-    assert first == [7]
-    assert second == [5, 8, 2]
-
-
-def test_sparse_index_init() -> None:
-    """__init__() starts with no stored embeddings."""
-    # Act
-    index = MemorySparseIndex()
-
-    # Assert
-    assert index._embeddings == {}
-
-
-def test_sparse_key_ignores_insertion_order() -> None:
-    """_sparse_key() derives the same key regardless of dict insertion order."""
-    # Act
-    key = _sparse_key({1: 0.5, 9: 1.5})
-
-    # Assert
-    assert key == _sparse_key({9: 1.5, 1: 0.5})
-    assert key != _sparse_key({1: 0.5, 9: 2.5})
-
-
-def test_sparse_score() -> None:
-    """_sparse_score() sums the weight products of shared tokens."""
-    # Arrange
-    query = {1: 2.0, 2: 3.0, 4: 1.0}
-    stored = {1: 0.5, 2: 1.0}
-    expected_score = 4.0
+    postings = {1: {"a": 1.0, "b": 0.5}, 2: {"a": 2.0}}
+    query = {1: 2.0, 2: 3.0}
 
     # Act & Assert
-    assert _sparse_score(query, stored) == expected_score
-    assert _sparse_score(stored, query) == expected_score
+    assert _scores(postings, query) == {"a": 8.0, "b": 1.0}
+
+
+def test_top_keys_ranks_and_drops_non_positive() -> None:
+    """_top_keys() ranks by score, caps results, and drops non-positive matches."""
+    # Act & Assert
+    assert _top_keys({"a": 8.0, "b": 1.0, "c": 0.0}, 2) == ["a", "b"]
+    assert _top_keys({"a": 8.0, "b": 1.0}, 1) == ["a"]
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_add_is_idempotent() -> None:
-    """Adding the same embedding twice yields one key and one entry."""
-    # Arrange
-    index = MemorySparseIndex()
-
+async def test_sparse_index_getitem_returns_stored_embedding(
+    sparse_index: SparseIndex[str],
+) -> None:
+    """__getitem__() returns the weight map stored under the key."""
     # Act
-    first = await index.add({1: 1.0})
-    second = await index.add({1: 1.0})
+    sparse_index["x"] = {1: 1.0, 2: 0.5}
 
     # Assert
-    assert first == second
-    assert await index.similar({1: 1.0}) == [first]
+    assert sparse_index["x"] == {1: 1.0, 2: 0.5}
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_similar_ranks_nearest_first() -> None:
+async def test_sparse_index_similar_ranks_nearest_first(
+    sparse_index: SparseIndex[str],
+) -> None:
     """similar() returns keys ordered by inner-product similarity."""
     # Arrange
-    index = MemorySparseIndex()
-    x_key = await index.add({1: 1.0})
-    y_key = await index.add({1: 0.5, 2: 0.5})
+    sparse_index["x"] = {1: 1.0}
+    sparse_index["y"] = {1: 0.5, 2: 0.5}
 
     # Act & Assert
-    assert await index.similar({1: 1.0}) == [x_key, y_key]
+    assert await sparse_index.similar({1: 1.0}) == ["x", "y"]
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_similar_drops_non_matching_keys() -> None:
+async def test_sparse_index_similar_drops_non_matching_keys(
+    sparse_index: SparseIndex[str],
+) -> None:
     """similar() omits stored embeddings sharing no tokens with the query."""
     # Arrange
-    index = MemorySparseIndex()
-    x_key = await index.add({1: 1.0})
-    await index.add({2: 1.0})
+    sparse_index["x"] = {1: 1.0}
+    sparse_index["y"] = {2: 1.0}
 
     # Act & Assert
-    assert await index.similar({1: 1.0}) == [x_key]
+    assert await sparse_index.similar({1: 1.0}) == ["x"]
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_similar_caps_results() -> None:
+async def test_sparse_index_similar_caps_results(
+    sparse_index: SparseIndex[str],
+) -> None:
     """similar() returns at most the requested number of results."""
     # Arrange
-    index = MemorySparseIndex()
-    x_key = await index.add({1: 1.0})
-    await index.add({1: 0.5})
+    sparse_index["x"] = {1: 1.0}
+    sparse_index["y"] = {1: 0.5}
 
     # Act & Assert
-    assert await index.similar({1: 1.0}, results=1) == [x_key]
+    assert await sparse_index.similar({1: 1.0}, embedding_results=1) == ["x"]
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_similar_on_empty_index() -> None:
-    """similar() on an empty index returns no keys."""
-    # Arrange
-    index = MemorySparseIndex()
-
+async def test_sparse_index_similar_on_empty_index(
+    sparse_index: SparseIndex[str],
+) -> None:
+    """similar() on an index with no embeddings returns no keys."""
     # Act & Assert
-    assert await index.similar({1: 1.0}) == []
+    assert await sparse_index.similar({1: 1.0}) == []
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_remove_drops_key_from_results() -> None:
-    """Removed keys no longer appear in similarity results."""
-    # Arrange
-    index = MemorySparseIndex()
-    x_key = await index.add({1: 1.0})
-    y_key = await index.add({1: 0.5})
-
+async def test_sparse_index_overwrite_rewires_the_inverted_index(
+    sparse_index: SparseIndex[str],
+) -> None:
+    """Restoring a key retires its stale tokens and registers the new ones."""
     # Act
-    await index.remove(x_key)
+    sparse_index["x"] = {1: 1.0}
+    sparse_index["x"] = {2: 1.0}
 
     # Assert
-    assert await index.similar({1: 1.0}) == [y_key]
+    assert await sparse_index.similar({1: 1.0}) == []
+    assert await sparse_index.similar({2: 1.0}) == ["x"]
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_remove_of_absent_key_is_noop() -> None:
-    """Removing a key that was never added leaves the index unchanged."""
+async def test_sparse_index_delitem_drops_key_from_results(
+    sparse_index: SparseIndex[str],
+) -> None:
+    """A removed key no longer appears in similarity results."""
     # Arrange
-    index = MemorySparseIndex()
-    x_key = await index.add({1: 1.0})
+    sparse_index["x"] = {1: 1.0}
+    sparse_index["y"] = {1: 0.5}
 
     # Act
-    await index.remove(x_key + 1)
+    del sparse_index["x"]
 
     # Assert
-    assert await index.similar({1: 1.0}) == [x_key]
+    assert sparse_index.keys() == ["y"]
+    assert await sparse_index.similar({1: 1.0}) == ["y"]
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_batches_concurrent_calls() -> None:
+async def test_sparse_index_delitem_tolerates_a_desynced_token_index() -> None:
+    """Removing a key survives a token index cleared out from under the index."""
+    # Arrange
+    token_map: MemoryStore[int, dict[str, float]] = MemoryStore()
+    index: SparseIndex[str] = SparseIndex(MemoryStore(), token_map)
+    index["x"] = {1: 1.0}
+    token_map.clear()  # drop the inverted index behind the index's back
+
+    # Act
+    del index["x"]  # must not raise despite the missing posting list
+
+    # Assert
+    assert index.keys() == []
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_similar_loads_only_query_tokens() -> None:
+    """similar() reads the posting lists of the query's tokens and no others."""
+    # Arrange
+    token_map = _CountingTokenStore()
+    index: SparseIndex[str] = SparseIndex(MemoryStore(), token_map)
+    index["a"] = {1: 1.0}
+    index["b"] = {2: 1.0, 3: 1.0}
+    token_map.reads.clear()
+
+    # Act
+    await index.similar({2: 1.0})
+
+    # Assert
+    assert token_map.reads == [2]
+
+
+@pytest.mark.asyncio
+async def test_sparse_index_batches_concurrent_calls(
+    sparse_index: SparseIndex[str],
+) -> None:
     """Concurrent calls are batched, yet each caller gets its own result."""
     # Arrange
-    index = MemorySparseIndex()
+    sparse_index["x"] = {1: 1.0}
+    sparse_index["y"] = {2: 1.0}
 
     # Act
-    x_key, y_key = await asyncio.gather(index.add({1: 1.0}), index.add({2: 1.0}))
     x_result, y_result = await asyncio.gather(
-        index.similar({1: 1.0}), index.similar({2: 1.0})
+        sparse_index.similar({1: 1.0}), sparse_index.similar({2: 1.0})
     )
 
     # Assert
-    assert x_result == [x_key]
-    assert y_result == [y_key]
+    assert x_result == ["x"]
+    assert y_result == ["y"]
 
 
 @pytest.mark.asyncio
 async def test_sparse_index_does_not_batch_across_instances() -> None:
     """Concurrent calls on different indexes land in their own index."""
     # Arrange
-    first = MemorySparseIndex()
-    second = MemorySparseIndex()
+    first: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
+    second: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
+    first["x"] = {1: 1.0}
+    second["y"] = {1: 1.0}
 
     # Act
-    x_key, y_key = await asyncio.gather(first.add({1: 1.0}), second.add({2: 1.0}))
+    x_result, y_result = await asyncio.gather(
+        first.similar({1: 1.0}), second.similar({1: 1.0})
+    )
 
     # Assert
-    assert await first.similar({1: 1.0, 2: 1.0}) == [x_key]
-    assert await second.similar({1: 1.0, 2: 1.0}) == [y_key]
+    assert x_result == ["x"]
+    assert y_result == ["y"]
 
 
-def test_file_sparse_index_init() -> None:
-    """__init__() starts with no stored keys."""
+@pytest.mark.asyncio
+async def test_sparse_index_works_with_file_backed_stores(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """File-backed stores seal the embeddings and token index on disk."""
+    # Arrange
+    monkeypatch.chdir(tmp_path)
+    index: SparseIndex[str] = SparseIndex(FileStore(), FileStore())
+
     # Act
-    index = FileSparseIndex()
+    index["x"] = {1: 1.0}
+    index["y"] = {1: 0.5}
 
     # Assert
-    assert index._keys == set()
+    assert await index.similar({1: 1.0}) == ["x", "y"]
+    assert index["x"] == {1: 1.0}
+    assert list((tmp_path / ".jar" / "stores").iterdir())
 
 
 @pytest.mark.asyncio
-async def test_file_sparse_index_seals_embeddings_on_disk(
-    file_index: FileSparseIndex, tmp_path: Path
+async def test_sparse_index_drops_unsealed_postings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """add() seals the embedding in the jar directory."""
-    # Act
-    await file_index.add({1: 1.0})
-
-    # Assert
-    assert list((tmp_path / ".jar" / "indexes").iterdir())
-
-
-@pytest.mark.asyncio
-async def test_file_sparse_index_add_is_idempotent(
-    file_index: FileSparseIndex,
-) -> None:
-    """Adding the same embedding twice yields one key and one entry."""
-    # Act
-    first = await file_index.add({1: 1.0})
-    second = await file_index.add({1: 1.0})
-
-    # Assert
-    assert first == second
-    assert await file_index.similar({1: 1.0}) == [first]
-
-
-@pytest.mark.asyncio
-async def test_file_sparse_index_keys_match_memory_sparse_index(
-    file_index: FileSparseIndex,
-) -> None:
-    """Both sparse indexes derive the same key for the same embedding."""
-    # Act & Assert
-    assert await file_index.add({1: 1.0}) == await MemorySparseIndex().add({1: 1.0})
-
-
-@pytest.mark.asyncio
-async def test_file_sparse_index_similar_ranks_nearest_first(
-    file_index: FileSparseIndex,
-) -> None:
-    """similar() returns keys ordered by inner-product similarity."""
+    """similar() skips tokens whose sealed posting list is gone from the jar."""
     # Arrange
-    x_key = await file_index.add({1: 1.0})
-    y_key = await file_index.add({1: 0.5, 2: 0.5})
-
-    # Act & Assert
-    assert await file_index.similar({1: 1.0}) == [x_key, y_key]
-
-
-@pytest.mark.asyncio
-async def test_file_sparse_index_similar_drops_non_matching_keys(
-    file_index: FileSparseIndex,
-) -> None:
-    """similar() omits stored embeddings sharing no tokens with the query."""
-    # Arrange
-    x_key = await file_index.add({1: 1.0})
-    await file_index.add({2: 1.0})
-
-    # Act & Assert
-    assert await file_index.similar({1: 1.0}) == [x_key]
-
-
-@pytest.mark.asyncio
-async def test_file_sparse_index_similar_caps_results(
-    file_index: FileSparseIndex,
-) -> None:
-    """similar() returns at most the requested number of results."""
-    # Arrange
-    x_key = await file_index.add({1: 1.0})
-    await file_index.add({1: 0.5})
-
-    # Act & Assert
-    assert await file_index.similar({1: 1.0}, results=1) == [x_key]
-
-
-@pytest.mark.asyncio
-async def test_file_sparse_index_similar_on_empty_index(
-    file_index: FileSparseIndex,
-) -> None:
-    """similar() on an empty index returns no keys."""
-    # Act & Assert
-    assert await file_index.similar({1: 1.0}) == []
-
-
-@pytest.mark.asyncio
-async def test_file_sparse_index_similar_drops_unsealed_keys(
-    file_index: FileSparseIndex, tmp_path: Path
-) -> None:
-    """similar() skips keys whose sealed embedding is gone from the jar."""
-    # Arrange
-    await file_index.add({1: 1.0})
-    for file in (tmp_path / ".jar" / "indexes").iterdir():
+    monkeypatch.chdir(tmp_path)
+    index: SparseIndex[str] = SparseIndex(FileStore(), FileStore())
+    index["x"] = {1: 1.0}
+    for file in (tmp_path / ".jar" / "stores").iterdir():
         file.unlink()
 
     # Act & Assert
-    assert await file_index.similar({1: 1.0}) == []
-
-
-@pytest.mark.asyncio
-async def test_file_sparse_index_remove_drops_key_from_results(
-    file_index: FileSparseIndex,
-) -> None:
-    """Removed keys no longer appear in similarity results."""
-    # Arrange
-    x_key = await file_index.add({1: 1.0})
-    y_key = await file_index.add({1: 0.5})
-
-    # Act
-    await file_index.remove(x_key)
-
-    # Assert
-    assert await file_index.similar({1: 1.0}) == [y_key]
-
-
-@pytest.mark.asyncio
-async def test_file_sparse_index_remove_of_absent_key_is_noop(
-    file_index: FileSparseIndex,
-) -> None:
-    """Removing a key that was never added leaves the index unchanged."""
-    # Arrange
-    x_key = await file_index.add({1: 1.0})
-
-    # Act
-    await file_index.remove(x_key + 1)
-
-    # Assert
-    assert await file_index.similar({1: 1.0}) == [x_key]
-
-
-@pytest.mark.asyncio
-async def test_file_sparse_index_batches_concurrent_calls(
-    file_index: FileSparseIndex,
-) -> None:
-    """Concurrent calls are batched, yet each caller gets its own result."""
-    # Act
-    x_key, y_key = await asyncio.gather(
-        file_index.add({1: 1.0}), file_index.add({2: 1.0})
-    )
-    x_result, y_result = await asyncio.gather(
-        file_index.similar({1: 1.0}), file_index.similar({2: 1.0})
-    )
-
-    # Assert
-    assert x_result == [x_key]
-    assert y_result == [y_key]
-
-
-@pytest.mark.asyncio
-async def test_file_sparse_index_does_not_batch_across_instances(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Concurrent calls on different indexes land in their own index."""
-    # Arrange
-    monkeypatch.chdir(tmp_path)
-    first = FileSparseIndex()
-    second = FileSparseIndex()
-
-    # Act
-    x_key, y_key = await asyncio.gather(first.add({1: 1.0}), second.add({2: 1.0}))
-
-    # Assert
-    assert await first.similar({1: 1.0, 2: 1.0}) == [x_key]
-    assert await second.similar({1: 1.0, 2: 1.0}) == [y_key]
+    assert await index.similar({1: 1.0}) == []

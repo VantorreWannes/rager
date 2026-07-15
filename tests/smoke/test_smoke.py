@@ -9,7 +9,7 @@ import pytest
 
 import rager
 from rager.fusers import BordaCountFuser, ReciprocalRankFuser
-from rager.indexes import MemoryDenseIndex, MemorySparseIndex
+from rager.indexes import FaissIndex, SparseIndex
 from rager.stores import MemoryStore
 
 pytestmark = pytest.mark.smoke
@@ -25,17 +25,18 @@ def test_public_api_exports_resolve() -> None:
 async def test_dense_retrieval_round_trip() -> None:
     """A hand-made dense embedding is indexed, retrieved, and mapped to text."""
     # Arrange
-    index = MemoryDenseIndex(3)
-    chunks: MemoryStore[int, str] = MemoryStore()
-    key = await index.add([1.0, 0.0, 0.0])
-    chunks.set(key, "cats")
-    chunks.set(await index.add([0.0, 1.0, 0.0]), "stocks")
+    index: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
+    chunks: MemoryStore[str, str] = MemoryStore()
+    index["cats"] = [1.0, 0.0, 0.0]
+    chunks.set("cats", "cats")
+    index["stocks"] = [0.0, 1.0, 0.0]
+    chunks.set("stocks", "stocks")
 
     # Act
-    (nearest,) = await index.similar([0.9, 0.1, 0.0], results=1)
+    (nearest,) = await index.similar([0.9, 0.1, 0.0], embedding_results=1)
 
     # Assert
-    assert nearest == key
+    assert nearest == "cats"
     assert chunks.get(nearest) == "cats"
 
 
@@ -43,15 +44,15 @@ async def test_dense_retrieval_round_trip() -> None:
 async def test_sparse_retrieval_round_trip() -> None:
     """A hand-made sparse embedding is indexed and retrieved by overlap."""
     # Arrange
-    index = MemorySparseIndex()
-    key = await index.add({1: 1.0, 2: 0.5})
-    await index.add({3: 1.0})
+    index: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
+    index["overlap"] = {1: 1.0, 2: 0.5}
+    index["disjoint"] = {3: 1.0}
 
     # Act
-    (nearest,) = await index.similar({1: 1.0}, results=1)
+    (nearest,) = await index.similar({1: 1.0}, embedding_results=1)
 
     # Assert
-    assert nearest == key
+    assert nearest == "overlap"
 
 
 def test_fusers_rank_unanimous_winner_first() -> None:

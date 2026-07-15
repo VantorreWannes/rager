@@ -2,302 +2,245 @@
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast, override
 
-import blake3
 import concresce
+import dill
 import faiss
 import numpy as np
 from belljar import Jar
+from blake3 import blake3
 
+from rager.stores import BaseStore, Store
 from rager.types import SparseEmbedding
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable
+    from collections.abc import Awaitable, Hashable
 
-    from rager import DenseEmbedding
 
 logger = logging.getLogger(__name__)
 
 
-class Index[E, K](Protocol):
+class Index[K, E](Store[K, E], Protocol):
     """Protocol for an embedding index."""
 
-    def add(self, embedding: E) -> Awaitable[K]:
-        """Add an embedding to the index and return its key."""
-        ...
-
-    def remove(self, key: K) -> Awaitable[None]:
-        """Remove an embedding from the index by its key."""
-        ...
-
-    def similar(self, embedding: E, results: int = 100) -> Awaitable[list[K]]:
-        """Retrieve the keys of the ``results`` most similar embeddings."""
+    def similar(self, embedding: E, embedding_results: int) -> Awaitable[list[K]]:
+        """Retrieve the keys of the ``embedding_results`` most similar embeddings."""
         ...
 
 
-class MemoryDenseIndex:
-    """In-memory dense embedding index backed by a flat FAISS inner-product index."""
+class FaissIndex[K: Hashable, E](BaseStore[K, E]):
+    """Index for embeddings using FAISS.
 
-    def __init__(self, dimensions: int | None = None) -> None:
-        """Initialize the index, optionally fixing the embedding dimension."""
-        self.dimensions = dimensions
-        self._index: faiss.IndexIDMap | None = None
+    Similarity search runs on an in-memory FAISS index, while the embeddings
+    themselves are sealed on disk in a JAR, in the same way as ``FileStore``.
+    """
 
-    def _ensure_index(self, dimensions: int) -> faiss.IndexIDMap:
-        """Return the index, building it to match the first embedding's width."""
-        if self.dimensions is None:
-            logger.debug("Inferred embedding dimension %d from first batch", dimensions)
-            self.dimensions = dimensions
-        if dimensions != self.dimensions:
+    def __init__(self, dimensions: int, key_map: Store[K, int]) -> None:
+        """Initialize the index with the given dimensions."""
+        self._dimensions = dimensions
+        self.index = faiss.IndexIDMap(faiss.IndexFlatIP(self._dimensions))
+        self._key_map = key_map
+
+    def _jar(self, key: K, faiss_id: int) -> Jar[E]:
+        """Open a jar positioned at the identity of the given key and FAISS id."""
+        jar = Jar[E](Path(".jar/indexes"))
+        jar.include(self.keys.__code__)
+        jar.include(self.__setitem__.__code__)
+        jar.include(self.__getitem__.__code__)
+        jar.include(self.__delitem__.__code__)
+        jar.include(self._jar.__code__)
+        jar.include(key)
+        jar.include(faiss_id)
+        return jar
+
+    @staticmethod
+    def _id(key: object) -> int:
+        """Derive a deterministic int64 FAISS id from the key's content."""
+        digest = blake3(dill.dumps(key)).digest()
+        return int.from_bytes(digest[:8], "little", signed=True)
+
+    def _to_rows(self, embeddings: list[E]) -> np.ndarray:
+        """Convert embeddings into a float32 matrix, validating their width."""
+        rows = np.asarray(embeddings, dtype=np.float32)
+        if rows.shape[1] != self._dimensions:
             message = (
-                f"Embedding has {dimensions} dimensions, "
-                f"but the index expects {self.dimensions}."
+                f"Embedding has {rows.shape[1]} dimensions, "
+                f"but the index expects {self._dimensions}."
             )
             logger.error(message)
             raise ValueError(message)
-        if self._index is None:
-            logger.info("Created dense FAISS index with %d dimensions", self.dimensions)
-            self._index = faiss.IndexIDMap(faiss.IndexFlatIP(self.dimensions))
-        return self._index
+        return rows
 
-    @staticmethod
-    def _to_rows(embeddings: list[DenseEmbedding]) -> np.ndarray:
-        """Convert embeddings into a float32 matrix for FAISS."""
-        return np.asarray(embeddings, dtype=np.float32)
+    @override
+    def keys(self) -> list[K]:
+        """Return the keys in the store."""
+        return self._key_map.keys()
 
-    @staticmethod
-    def _key(row: np.ndarray) -> int:
-        """Derive a deterministic int64 key from the embedding's content."""
-        digest = blake3.blake3(row.tobytes()).digest()
-        return int.from_bytes(digest[:8], "little", signed=True)
+    @override
+    def __setitem__(self, key: K, value: E) -> None:
+        """Store an embedding with the given key."""
+        logger.debug("Storing embedding for key %r", key)
+        rows = self._to_rows([value])
+        faiss_id = self._id(key)
+        ids = np.asarray([faiss_id], dtype=np.int64)
+        self.index.remove_ids(faiss.IDSelectorBatch(ids))
+        self.index.add_with_ids(rows, ids)
+        self._jar(key, faiss_id).set(value)
+        self._key_map[key] = faiss_id
+
+    @override
+    def __getitem__(self, key: K) -> E:
+        """Retrieve an embedding by its key."""
+        logger.debug("Retrieving embedding for key %r", key)
+        faiss_id = self._key_map[key]
+        return cast("E", self._jar(key, faiss_id).get())
+
+    @override
+    def __delitem__(self, key: K) -> None:
+        """Remove an embedding by its key."""
+        logger.debug("Removing embedding for key %r", key)
+        ids = np.asarray([self._key_map[key]], dtype=np.int64)
+        self.index.remove_ids(faiss.IDSelectorBatch(ids))
+        del self._key_map[key]
 
     @concresce.batch
-    async def add(self, embedding: DenseEmbedding) -> int:
-        """Add an embedding to the index and return its key."""
-        embeddings = await concresce.collect(embedding)
-        rows = self._to_rows(embeddings)
-        index = self._ensure_index(rows.shape[1])
-        keys = [self._key(row) for row in rows]
-        unique = dict(zip(keys, rows, strict=True))
-        ids = np.asarray(list(unique), dtype=np.int64)
-        index.remove_ids(faiss.IDSelectorBatch(ids))
-        index.add_with_ids(self._to_rows(list(unique.values())), ids)
-        logger.debug(
-            "Added %d embeddings (%d unique) to the dense index; total is now %d",
-            len(keys),
-            len(unique),
-            index.ntotal,
-        )
-        return concresce.scatter(keys)
-
-    @concresce.batch
-    async def remove(self, key: int) -> None:
-        """Remove an embedding from the index by its key."""
-        keys = await concresce.collect(key)
-        if self._index is None:
+    async def similar(self, embedding: E, embedding_results: int = 100) -> list[K]:
+        """Retrieve the keys of the ``embedding_results`` most similar embeddings."""
+        collected = await concresce.collect((embedding, embedding_results))
+        if not self.index.ntotal:
             logger.warning(
-                "Ignoring removal of %d keys from an empty dense index", len(keys)
-            )
-        else:
-            ids = np.asarray(keys, dtype=np.int64)
-            removed = self._index.remove_ids(faiss.IDSelectorBatch(ids))
-            logger.debug(
-                "Removed %d of %d keys from the dense index; total is now %d",
-                removed,
-                len(keys),
-                self._index.ntotal,
-            )
-        return concresce.scatter([None] * len(keys))
-
-    @concresce.batch
-    async def similar(self, embedding: DenseEmbedding, results: int = 100) -> list[int]:
-        """Retrieve the keys of the ``results`` most similar embeddings."""
-        collected = await concresce.collect((embedding, results))
-        embeddings = [query for query, _ in collected]
-        counts = [count for _, count in collected]
-        if self._index is None:
-            logger.warning(
-                "Similarity search of %d queries on an empty dense index",
+                "Similarity search of %d queries on an empty FAISS index",
                 len(collected),
             )
             return concresce.scatter([[] for _ in collected])
         logger.debug(
-            "Searching the dense index of %d embeddings with %d queries",
-            self._index.ntotal,
+            "Searching the FAISS index of %d embeddings with %d queries",
+            self.index.ntotal,
             len(collected),
         )
-        _, ids = self._index.search(self._to_rows(embeddings), max(counts))
+        queries = self._to_rows([query for query, _ in collected])
+        counts = [count for _, count in collected]
+        _, ids = self.index.search(queries, max(counts))
+        stored = self._key_map.keys()
+        key_by_id = {self._key_map[key]: key for key in stored}
         rankings = [
-            [int(i) for i in row[:count] if i != -1]
+            [key_by_id[int(i)] for i in row[:count] if int(i) in key_by_id]
             for row, count in zip(ids, counts, strict=True)
         ]
         return concresce.scatter(rankings)
 
 
-def _sparse_key(embedding: SparseEmbedding) -> int:
-    """Derive a deterministic int64 key from the embedding's content."""
-    tokens = sorted(embedding)
-    weights = [embedding[token] for token in tokens]
-    data = np.asarray(tokens, dtype=np.int64).tobytes()
-    data += np.asarray(weights, dtype=np.float32).tobytes()
-    digest = blake3.blake3(data).digest()
-    return int.from_bytes(digest[:8], "little", signed=True)
+def _scores[K](
+    postings: dict[int, dict[K, float]], query: SparseEmbedding
+) -> dict[K, float]:
+    """Accumulate inner-product scores for every stored key matching the query."""
+    scores: dict[K, float] = {}
+    for token, weight in query.items():
+        for key, stored in postings[token].items():
+            scores[key] = scores.get(key, 0.0) + weight * stored
+    return scores
 
 
-def _sparse_score(query: SparseEmbedding, stored: SparseEmbedding) -> float:
-    """Compute the inner product between two weight maps."""
-    if len(stored) < len(query):
-        query, stored = stored, query
-    return sum(weight * stored.get(token, 0.0) for token, weight in query.items())
-
-
-def _top_sparse_keys(
-    embeddings: dict[int, SparseEmbedding], query: SparseEmbedding, results: int
-) -> list[int]:
-    """Rank stored keys by inner product with the query, dropping misses."""
-    scores = {key: _sparse_score(query, stored) for key, stored in embeddings.items()}
+def _top_keys[K](scores: dict[K, float], results: int) -> list[K]:
+    """Rank keys by score, dropping non-positive matches."""
     ranked = sorted(scores, key=lambda key: scores[key], reverse=True)
     return [key for key in ranked[:results] if scores[key] > 0]
 
 
-class MemorySparseIndex:
-    """In-memory sparse index using inner-product similarity over weight maps."""
+class SparseIndex[K: Hashable](BaseStore[K, SparseEmbedding]):
+    """Sparse index using inner-product similarity over weight maps.
 
-    def __init__(self) -> None:
-        """Initialize the sparse index."""
-        self._embeddings: dict[int, SparseEmbedding] = {}
-
-    @concresce.batch
-    async def add(self, embedding: SparseEmbedding) -> int:
-        """Add an embedding to the index and return its key."""
-        embeddings = await concresce.collect(embedding)
-        keys = [_sparse_key(e) for e in embeddings]
-        self._embeddings.update(zip(keys, embeddings, strict=True))
-        logger.debug(
-            "Added %d embeddings to the memory sparse index; total is now %d",
-            len(keys),
-            len(self._embeddings),
-        )
-        return concresce.scatter(keys)
-
-    @concresce.batch
-    async def remove(self, key: int) -> None:
-        """Remove an embedding from the index by its key."""
-        keys = await concresce.collect(key)
-        removed = 0
-        for k in keys:
-            removed += self._embeddings.pop(k, None) is not None
-        logger.debug(
-            "Removed %d of %d keys from the memory sparse index; total is now %d",
-            removed,
-            len(keys),
-            len(self._embeddings),
-        )
-        return concresce.scatter([None] * len(keys))
-
-    @concresce.batch
-    async def similar(
-        self, embedding: SparseEmbedding, results: int = 100
-    ) -> list[int]:
-        """Retrieve the keys of the ``results`` most similar embeddings."""
-        collected = await concresce.collect((embedding, results))
-        if not self._embeddings:
-            logger.warning(
-                "Similarity search of %d queries on an empty memory sparse index",
-                len(collected),
-            )
-        else:
-            logger.debug(
-                "Searching the memory sparse index of %d embeddings with %d queries",
-                len(self._embeddings),
-                len(collected),
-            )
-        rankings = [
-            _top_sparse_keys(self._embeddings, query, count)
-            for query, count in collected
-        ]
-        return concresce.scatter(rankings)
-
-
-class FileSparseIndex:
-    """JAR-based sparse index using inner-product similarity over weight maps.
-
-    Embeddings are sealed on disk in a JAR, so only their keys stay in memory.
+    The embeddings and the inverted token index are delegated to the injected
+    stores, so the caller decides whether they live in memory or on disk.
+    Similarity search only loads the posting lists of the query's tokens,
+    never the full set of stored embeddings.
     """
 
-    def __init__(self) -> None:
-        """Initialize the index with no keys."""
-        self._keys: set[int] = set()
+    def __init__(
+        self,
+        embedding_map: Store[K, SparseEmbedding],
+        token_map: Store[int, dict[K, float]],
+    ) -> None:
+        """Initialize the index with the given embedding and token stores."""
+        self._embedding_map = embedding_map
+        self._token_map = token_map
 
-    def _jar(self, key: int) -> Jar[SparseEmbedding]:
-        """Open a jar positioned at the identity of the given key."""
-        jar = Jar[SparseEmbedding](Path(".jar/indexes"))
-        jar.include(_sparse_key.__code__)
-        jar.include(key)
-        return jar
+    def _postings(self, token: int) -> dict[K, float]:
+        """Return the token's posting list, or an empty one if it has none."""
+        try:
+            return self._token_map[token] or {}
+        except KeyError:
+            return {}
 
-    def _load(self) -> dict[int, SparseEmbedding]:
-        """Load the sealed embeddings, dropping keys whose seal is gone."""
-        embeddings: dict[int, SparseEmbedding] = {}
-        for key in self._keys:
-            embedding = self._jar(key).get()
-            if embedding is None:
-                logger.debug("No embedding found in JAR for key %r", key)
-            else:
-                embeddings[key] = embedding
-        return embeddings
+    def _drop(self, token: int, key: K) -> None:
+        """Remove the key from the token's posting list, dropping empty lists."""
+        try:
+            postings = self._token_map[token] or {}
+        except KeyError:
+            return
+        postings.pop(key, None)
+        if postings:
+            self._token_map[token] = postings
+        else:
+            del self._token_map[token]
 
-    @concresce.batch
-    async def add(self, embedding: SparseEmbedding) -> int:
-        """Add an embedding to the index and return its key."""
-        embeddings = await concresce.collect(embedding)
-        keys = [_sparse_key(e) for e in embeddings]
-        for key, stored in zip(keys, embeddings, strict=True):
-            self._jar(key).set(stored)
-        self._keys.update(keys)
-        logger.debug(
-            "Added %d embeddings to the file sparse index; total is now %d",
-            len(keys),
-            len(self._keys),
-        )
-        return concresce.scatter(keys)
+    @override
+    def keys(self) -> list[K]:
+        """Return the keys in the store."""
+        return self._embedding_map.keys()
 
-    @concresce.batch
-    async def remove(self, key: int) -> None:
-        """Remove an embedding from the index by its key."""
-        keys = await concresce.collect(key)
-        removed = 0
-        for k in keys:
-            removed += k in self._keys
-            self._keys.discard(k)
-        logger.debug(
-            "Removed %d of %d keys from the file sparse index; total is now %d",
-            removed,
-            len(keys),
-            len(self._keys),
-        )
-        return concresce.scatter([None] * len(keys))
+    @override
+    def __setitem__(self, key: K, value: SparseEmbedding) -> None:
+        """Store an embedding with the given key."""
+        logger.debug("Storing embedding for key %r", key)
+        try:
+            stale = self._embedding_map[key] or {}
+        except KeyError:
+            stale = {}
+        for token in stale.keys() - value.keys():
+            self._drop(token, key)
+        for token, weight in value.items():
+            postings = self._postings(token)
+            postings[key] = weight
+            self._token_map[token] = postings
+        self._embedding_map[key] = value
+
+    @override
+    def __getitem__(self, key: K) -> SparseEmbedding:
+        """Retrieve an embedding by its key."""
+        logger.debug("Retrieving embedding for key %r", key)
+        return self._embedding_map[key]
+
+    @override
+    def __delitem__(self, key: K) -> None:
+        """Remove an embedding by its key."""
+        logger.debug("Removing embedding for key %r", key)
+        embedding = self._embedding_map[key] or {}
+        for token in embedding:
+            self._drop(token, key)
+        del self._embedding_map[key]
 
     @concresce.batch
     async def similar(
-        self, embedding: SparseEmbedding, results: int = 100
-    ) -> list[int]:
-        """Retrieve the keys of the ``results`` most similar embeddings."""
-        collected = await concresce.collect((embedding, results))
-        if not self._keys:
+        self, embedding: SparseEmbedding, embedding_results: int = 100
+    ) -> list[K]:
+        """Retrieve the keys of the ``embedding_results`` most similar embeddings."""
+        collected = await concresce.collect((embedding, embedding_results))
+        if not self._embedding_map.keys():
             logger.warning(
-                "Similarity search of %d queries on an empty file sparse index",
+                "Similarity search of %d queries on an empty sparse index",
                 len(collected),
             )
-        else:
-            logger.debug(
-                "Searching the file sparse index of %d embeddings with %d queries",
-                len(self._keys),
-                len(collected),
-            )
-        embeddings = self._load()
+            return concresce.scatter([[] for _ in collected])
+        tokens = {token for query, _ in collected for token in query}
+        logger.debug(
+            "Searching the sparse index with %d queries over %d tokens",
+            len(collected),
+            len(tokens),
+        )
+        postings = {token: self._postings(token) for token in tokens}
         rankings = [
-            _top_sparse_keys(embeddings, query, count) for query, count in collected
+            _top_keys(_scores(postings, query), count) for query, count in collected
         ]
         return concresce.scatter(rankings)
