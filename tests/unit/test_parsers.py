@@ -48,7 +48,14 @@ def test_unstructured_file_parser_units(
 
     # Assert
     assert result == ["first", "second"]
-    partition.assert_called_once_with(filename=str(file))
+    partition.assert_called_once_with(
+        filename=str(file),
+        chunking_strategy="by_title",
+        max_characters=1500,
+        new_after_n_chars=1200,
+        combine_text_under_n_chars=500,
+        overlap=150,
+    )
     jar.include.assert_any_call(UnstructuredFileParser().id(file).digest())
     jar.set.assert_called_once_with(["first", "second"])
 
