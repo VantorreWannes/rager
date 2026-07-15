@@ -2,9 +2,16 @@
 
 import pytest
 
-from rager.fusers import BordaCountFuser, ReciprocalRankFuser
+from rager.fusers import BaseFuser, BordaCountFuser, ReciprocalRankFuser
 
 pytestmark = pytest.mark.unit
+
+
+def test_base_fuser_is_abstract() -> None:
+    """BaseFuser cannot be instantiated without the weight operation."""
+    # Act & Assert
+    with pytest.raises(TypeError):
+        BaseFuser()  # type: ignore[abstract]
 
 
 def test_reciprocal_rank_fuser_of_no_rankings_returns_empty_list() -> None:

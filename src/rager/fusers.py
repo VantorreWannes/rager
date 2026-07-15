@@ -1,7 +1,8 @@
 """Fusers for combining ranked lists of values."""
 
 import logging
-from typing import TYPE_CHECKING, Protocol
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Protocol, override
 
 if TYPE_CHECKING:
     from collections.abc import Hashable
@@ -17,37 +18,47 @@ class Fuser[V](Protocol):
         ...
 
 
-class ReciprocalRankFuser[V: Hashable]:
+class BaseFuser[V: Hashable](ABC):
+    """Abstract helper base deriving the ``Fuser`` protocol from one operation.
+
+    Subclasses implement ``_weight``; ``fuse`` sums each value's weights
+    across the rankings and sorts by total weight.
+    """
+
+    @abstractmethod
+    def _weight(self, rank: int, size: int, /) -> float:
+        """Return the weight of holding 1-based ``rank`` in a ranking of ``size``."""
+
+    def fuse(self, *values: list[V]) -> list[V]:
+        """Fuse multiple ranked lists into one list ranked by total weight."""
+        logger.debug("Fusing %d rankings with %s", len(values), type(self).__name__)
+        scores: dict[V, float] = {}
+        for ranking in values:
+            for rank, value in enumerate(ranking, start=1):
+                weight = self._weight(rank, len(ranking))
+                scores[value] = scores.get(value, 0.0) + weight
+        fused = sorted(scores, key=lambda value: scores[value], reverse=True)
+        logger.debug("Fused rankings into %d distinct values", len(fused))
+        return fused
+
+
+class ReciprocalRankFuser[V: Hashable](BaseFuser[V]):
     """Fuser that combines ranked lists by reciprocal rank fusion."""
 
     def __init__(self, k: int = 60) -> None:
         """Initialize the fuser with the reciprocal rank smoothing constant."""
         self.k = k
 
-    def fuse(self, *values: list[V]) -> list[V]:
-        """Fuse multiple ranked lists into one list ranked by reciprocal rank."""
-        logger.debug(
-            "Fusing %d rankings by reciprocal rank (k=%d)", len(values), self.k
-        )
-        scores: dict[V, float] = {}
-        for ranking in values:
-            for rank, value in enumerate(ranking, start=1):
-                scores[value] = scores.get(value, 0.0) + 1 / (self.k + rank)
-        fused = sorted(scores, key=lambda value: scores[value], reverse=True)
-        logger.debug("Fused rankings into %d distinct values", len(fused))
-        return fused
+    @override
+    def _weight(self, rank: int, size: int, /) -> float:
+        """Return the reciprocal rank weight, smoothed by the constant ``k``."""
+        return 1 / (self.k + rank)
 
 
-class BordaCountFuser[V: Hashable]:
+class BordaCountFuser[V: Hashable](BaseFuser[V]):
     """Fuser that combines ranked lists by Borda count."""
 
-    def fuse(self, *values: list[V]) -> list[V]:
-        """Fuse multiple ranked lists into one list ranked by Borda count."""
-        logger.debug("Fusing %d rankings by Borda count", len(values))
-        scores: dict[V, int] = {}
-        for ranking in values:
-            for rank, value in enumerate(ranking):
-                scores[value] = scores.get(value, 0) + len(ranking) - rank
-        fused = sorted(scores, key=lambda value: scores[value], reverse=True)
-        logger.debug("Fused rankings into %d distinct values", len(fused))
-        return fused
+    @override
+    def _weight(self, rank: int, size: int, /) -> float:
+        """Return the Borda count: the number of values at or below this rank."""
+        return size - rank + 1

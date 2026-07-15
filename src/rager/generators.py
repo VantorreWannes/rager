@@ -1,9 +1,10 @@
 """Generators for producing answers to prompts."""
 
 import logging
+from abc import ABC, abstractmethod
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, override
 
 import concresce
 from belljar import Jar
@@ -25,7 +26,33 @@ class Generator(Protocol):
         ...
 
 
-class TransformersGenerator:
+class BaseGenerator(ABC):
+    """Abstract helper base deriving the ``Generator`` protocol from two operations.
+
+    Subclasses implement ``_jar`` and ``_generate``; ``prompt`` seals every
+    generated answer in the jar and returns it from there on later calls.
+    """
+
+    @abstractmethod
+    def _jar(self, query: str) -> Jar[str]:
+        """Open a jar positioned at the identity of the given query."""
+
+    @abstractmethod
+    def _generate(self, query: str) -> Awaitable[str]:
+        """Generate an answer to the query."""
+
+    async def prompt(self, query: str) -> str:
+        """Generate content based on the query."""
+        jar = self._jar(query)
+        if (cached := jar.get()) is not None:
+            return cached
+        logger.debug(
+            "Cache miss; generating answer for query of %d characters", len(query)
+        )
+        return jar.set(await self._generate(query))
+
+
+class TransformersGenerator(BaseGenerator):
     """Generator that prompts a local transformers text-generation model."""
 
     def __init__(
@@ -43,7 +70,18 @@ class TransformersGenerator:
         logger.info("Loading text-generation pipeline for model %r", self.model_name)
         return pipeline("text-generation", model=self.model_name)
 
+    @override
+    def _jar(self, query: str) -> Jar[str]:
+        """Open a jar positioned at the identity of the given query."""
+        jar = Jar[str](Path(".jar/generators"))
+        jar.include(self._jar.__code__)
+        jar.include(self.model_name)
+        jar.include(self.max_new_tokens)
+        jar.include(query)
+        return jar
+
     @concresce.batch
+    @override
     async def _generate(self, query: str) -> str:
         """Generate an answer for each query in the collected batch."""
         queries = await concresce.collect(query)
@@ -61,17 +99,3 @@ class TransformersGenerator:
         )
         answers = [output[0]["generated_text"][-1]["content"] for output in outputs]
         return concresce.scatter(answers)
-
-    async def prompt(self, query: str) -> str:
-        """Generate content based on the query."""
-        jar = Jar[str](Path(".jar/generators"))
-        jar.include(self.prompt.__code__)
-        jar.include(self.model_name)
-        jar.include(self.max_new_tokens)
-        jar.include(query)
-        if (cached := jar.get()) is not None:
-            return cached
-        logger.debug(
-            "Cache miss; generating answer for query of %d characters", len(query)
-        )
-        return jar.set(await self._generate(query))

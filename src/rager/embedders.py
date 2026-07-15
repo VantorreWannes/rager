@@ -1,9 +1,10 @@
 """Embedders for converting text chunks into vector representations."""
 
 import logging
+from abc import ABC, abstractmethod
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, override
 
 import concresce
 from belljar import Jar
@@ -28,7 +29,31 @@ class Embedder[E](Protocol):
         ...
 
 
-class SentenceTransformerDenseEmbedder:
+class BaseEmbedder[E](ABC):
+    """Abstract helper base deriving the ``Embedder`` protocol from two operations.
+
+    Subclasses implement ``_jar`` and ``_encode``; ``embed`` seals every
+    encoded embedding in the jar and returns it from there on later calls.
+    """
+
+    @abstractmethod
+    def _jar(self, chunk: str) -> Jar[E]:
+        """Open a jar positioned at the identity of the given chunk."""
+
+    @abstractmethod
+    def _encode(self, chunk: str) -> Awaitable[E]:
+        """Convert a text chunk into a vector representation."""
+
+    async def embed(self, chunk: str) -> E:
+        """Convert a text chunk into a vector representation."""
+        jar = self._jar(chunk)
+        if (cached := jar.get()) is not None:
+            return cached
+        logger.debug("Cache miss; embedding chunk of %d characters", len(chunk))
+        return jar.set(await self._encode(chunk))
+
+
+class SentenceTransformerDenseEmbedder(BaseEmbedder[DenseEmbedding]):
     """Dense embedding using SentenceTransformer."""
 
     def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
@@ -41,7 +66,17 @@ class SentenceTransformerDenseEmbedder:
         logger.info("Loading SentenceTransformer model %r", self.model_name)
         return SentenceTransformer(self.model_name)
 
+    @override
+    def _jar(self, chunk: str) -> Jar[DenseEmbedding]:
+        """Open a jar positioned at the identity of the given chunk."""
+        jar = Jar[DenseEmbedding](Path(".jar/embedders"))
+        jar.include(self._jar.__code__)
+        jar.include(self.model_name)
+        jar.include(chunk)
+        return jar
+
     @concresce.batch
+    @override
     async def _encode(self, chunk: str) -> DenseEmbedding:
         """Convert a text chunk into a vector representation."""
         chunks = await concresce.collect(chunk)
@@ -51,19 +86,8 @@ class SentenceTransformerDenseEmbedder:
         embeddings = self.model.encode(chunks, normalize_embeddings=True).tolist()
         return concresce.scatter(embeddings)
 
-    async def embed(self, chunk: str) -> DenseEmbedding:
-        """Convert a text chunk into a vector representation."""
-        jar = Jar[DenseEmbedding](Path(".jar/embedders"))
-        jar.include(self.embed.__code__)
-        jar.include(self.model_name)
-        jar.include(chunk)
-        if (cached := jar.get()) is not None:
-            return cached
-        logger.debug("Cache miss; embedding chunk of %d characters", len(chunk))
-        return jar.set(await self._encode(chunk))
 
-
-class SpladeSparseEmbedder:
+class SpladeSparseEmbedder(BaseEmbedder[SparseEmbedding]):
     """Sparse embedding using a SPLADE SparseEncoder."""
 
     def __init__(self, model_name: str = "prithivida/Splade_PP_en_v1") -> None:
@@ -101,7 +125,17 @@ class SpladeSparseEmbedder:
         """Split a coalesced sparse tensor into one weight map per input row."""
         return cls._group_by_row(cls._decode_entries(coalesced), count)
 
+    @override
+    def _jar(self, chunk: str) -> Jar[SparseEmbedding]:
+        """Open a jar positioned at the identity of the given chunk."""
+        jar = Jar[SparseEmbedding](Path(".jar/embedders"))
+        jar.include(self._jar.__code__)
+        jar.include(self.model_name)
+        jar.include(chunk)
+        return jar
+
     @concresce.batch
+    @override
     async def _encode(self, chunk: str) -> SparseEmbedding:
         """Convert a text chunk into a sparse vector representation."""
         chunks = await concresce.collect(chunk)
@@ -111,14 +145,3 @@ class SpladeSparseEmbedder:
         coalesced = self.model.encode(chunks).coalesce()
         embeddings = self._coalesced_to_embeddings(coalesced, len(chunks))
         return concresce.scatter(embeddings)
-
-    async def embed(self, chunk: str) -> SparseEmbedding:
-        """Convert a text chunk into a sparse vector representation."""
-        jar = Jar[SparseEmbedding](Path(".jar/embedders"))
-        jar.include(self.embed.__code__)
-        jar.include(self.model_name)
-        jar.include(chunk)
-        if (cached := jar.get()) is not None:
-            return cached
-        logger.debug("Cache miss; embedding chunk of %d characters", len(chunk))
-        return jar.set(await self._encode(chunk))

@@ -5,10 +5,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from rager.embedders import SentenceTransformerDenseEmbedder, SpladeSparseEmbedder
+from rager.embedders import (
+    BaseEmbedder,
+    SentenceTransformerDenseEmbedder,
+    SpladeSparseEmbedder,
+)
 from rager.types import DenseEmbedding, SparseEmbedding
 
 pytestmark = pytest.mark.unit
+
+
+def test_base_embedder_is_abstract() -> None:
+    """BaseEmbedder cannot be instantiated without the jar and encode operations."""
+    # Act & Assert
+    with pytest.raises(TypeError):
+        BaseEmbedder()  # type: ignore[abstract]
 
 
 @patch("rager.embedders.SentenceTransformer")

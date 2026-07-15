@@ -5,9 +5,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 from semantic_text_splitter import TextSplitter
 
-from rager.chunkers import SemanticChunker
+from rager.chunkers import BaseChunker, SemanticChunker
 
 pytestmark = pytest.mark.unit
+
+
+def test_base_chunker_is_abstract() -> None:
+    """BaseChunker cannot be instantiated without the jar and split operations."""
+    # Act & Assert
+    with pytest.raises(TypeError):
+        BaseChunker()  # type: ignore[abstract]
 
 
 @patch("rager.chunkers.get_chunker")
