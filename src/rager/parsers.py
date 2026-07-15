@@ -38,7 +38,14 @@ class UnstructuredFileParser:
         if (cached := jar.get()) is not None:
             return cached
         logger.info("Cache miss; parsing file %s", file)
-        elements = partition(filename=str(file))
+        elements = partition(
+            filename=str(file),
+            chunking_strategy="by_title",
+            max_characters=1500,
+            new_after_n_chars=1200,
+            combine_text_under_n_chars=500,
+            overlap=150,
+        )
         units = [element.text for element in elements]
         logger.debug("Extracted %d units from %s", len(units), file)
         return jar.set(units)
