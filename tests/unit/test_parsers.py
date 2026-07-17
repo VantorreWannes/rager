@@ -40,10 +40,11 @@ def test_unstructured_file_parser_units(
 ) -> None:
     """units() folds the file digest into the jar and seals the units."""
     # Arrange
-    partition.return_value = [
-        MagicMock(text="first"),
-        MagicMock(text="second"),
-    ]
+    first = MagicMock(text="first")
+    first.metadata.page_number = 1
+    second = MagicMock(text="second")
+    second.metadata.page_number = 2
+    partition.return_value = [first, second]
     file = MagicMock()
     file.read_bytes.return_value = b"payload"
     jar = jar_cls[list[str]].return_value

@@ -43,7 +43,7 @@ def test_markdown_file_parser_units(markdown_file: Path) -> None:
     """Test that the Markdown parser correctly extracts the document content."""
     parser = MarkdownFileParser()
     content = parser.units(markdown_file)
-    expected_length = 4
+    expected_length = 1
     assert len(content) == expected_length
 
 
