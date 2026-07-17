@@ -48,6 +48,6 @@ async def test_reciprocal_rank_fuser_fuses_dense_and_sparse_retrieval() -> None:
 
     dense_keys = await dense_index.similar([0.9, 0.1, 0.0])
     sparse_keys = await sparse_index.similar({1: 0.5})
-    fused = fuser.fuse(_chunks(store, dense_keys), _chunks(store, sparse_keys))
+    fused = await fuser.fuse(_chunks(store, dense_keys), _chunks(store, sparse_keys))
 
     assert fused == ["apple", "banana"]

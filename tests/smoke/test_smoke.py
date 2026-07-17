@@ -55,11 +55,12 @@ async def test_sparse_retrieval_round_trip() -> None:
     assert nearest == "overlap"
 
 
-def test_fusers_rank_unanimous_winner_first() -> None:
+@pytest.mark.asyncio
+async def test_fusers_rank_unanimous_winner_first() -> None:
     """Both fusers put the value every ranking prefers at the top."""
     # Arrange
     rankings = ([1, 2, 3], [1, 3, 2])
 
     # Act & Assert
-    assert ReciprocalRankFuser().fuse(*rankings)[0] == 1
-    assert BordaCountFuser().fuse(*rankings)[0] == 1
+    assert (await ReciprocalRankFuser().fuse(*rankings))[0] == 1
+    assert (await BordaCountFuser().fuse(*rankings))[0] == 1

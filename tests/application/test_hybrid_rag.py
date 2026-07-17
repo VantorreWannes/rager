@@ -65,7 +65,7 @@ async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
         sparse_index.similar(await sparse_embedder.embed(query)),
     )
     candidates: list[str] = []
-    for key in fuser.fuse(dense_ranking, sparse_ranking):
+    for key in await fuser.fuse(dense_ranking, sparse_ranking):
         text = chunks.get(key)
         if text is not None and text not in candidates:
             candidates.append(text)
