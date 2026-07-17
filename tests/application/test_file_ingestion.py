@@ -14,13 +14,13 @@ import pytest
 from rager.chunkers import SemanticChunker
 from rager.embedders import SentenceTransformerDenseEmbedder
 from rager.indexes import FaissIndex
-from rager.parsers import CsvFileParser, MarkdownFileParser, PdfFileParser
+from rager.parsers import CsvPageParser, MarkdownPageParser, PdfPageParser
 from rager.stores import MemoryStore
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from rager.parsers import UnstructuredFileParser
+    from rager.parsers import UnstructuredPageParser
 
 pytestmark = pytest.mark.application
 
@@ -28,14 +28,14 @@ pytestmark = pytest.mark.application
 @pytest.mark.parametrize(
     ("parser", "file_fixture"),
     [
-        (PdfFileParser, "pdf_file"),
-        (MarkdownFileParser, "markdown_file"),
-        (CsvFileParser, "csv_file"),
+        (PdfPageParser, "pdf_file"),
+        (MarkdownPageParser, "markdown_file"),
+        (CsvPageParser, "csv_file"),
     ],
 )
 @pytest.mark.asyncio
 async def test_file_ingestion_round_trips(
-    parser: type[UnstructuredFileParser],
+    parser: type[UnstructuredPageParser],
     file_fixture: str,
     request: pytest.FixtureRequest,
 ) -> None:
@@ -45,9 +45,10 @@ async def test_file_ingestion_round_trips(
     embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
     index: FaissIndex[int, list[float]] = FaissIndex(384, MemoryStore())
     chunks: MemoryStore[int, str] = MemoryStore()
+    chunker = SemanticChunker("gpt-3.5-turbo", 1000, 0)
     ingested: list[str] = []
-    for unit in parser().units(file):
-        for chunk in SemanticChunker().chunks(unit):
+    for unit in await parser().units(file):
+        for chunk in await chunker.chunks(unit):
             await index.set(len(ingested), await embedder.embed(chunk))
             chunks.set(len(ingested), chunk)
             ingested.append(chunk)

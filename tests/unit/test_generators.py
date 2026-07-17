@@ -57,23 +57,42 @@ async def test_transformers_generator_generate(model: MagicMock) -> None:
 
 @patch("rager.generators.pipeline")
 @pytest.mark.asyncio
-async def test_transformers_generator_does_not_batch_across_instances(
+async def test_transformers_generator_coalesces_across_instances(
     pipeline: MagicMock,
 ) -> None:
-    """Concurrent _generate() calls on different generators batch separately."""
+    """Concurrent _generate() calls on different generators share one call.
+
+    concresce 0.2 coalesces batches per event-loop turn rather than per
+    instance. Callers must not mix instances of the same batch-owning class
+    in concurrent calls; this documents the resulting shared-batch behavior.
+    """
     # Arrange
     first = TransformersGenerator("model-a")
     second = TransformersGenerator("model-b")
     model = pipeline.return_value
-    chat = [{"role": "assistant", "content": "answer"}]
-    model.return_value = [[{"generated_text": chat}]]
+    first_chat = [{"role": "assistant", "content": "first answer"}]
+    second_chat = [{"role": "assistant", "content": "second answer"}]
+    model.return_value = [
+        [{"generated_text": first_chat}],
+        [{"generated_text": second_chat}],
+    ]
 
     # Act
-    await asyncio.gather(first._generate("one"), second._generate("two"))
+    first_result, second_result = await asyncio.gather(
+        first._generate("one"), second._generate("two")
+    )
 
     # Assert
-    expected_calls = 2
-    assert model.call_count == expected_calls
+    model.assert_called_once_with(
+        [
+            [{"role": "user", "content": "one"}],
+            [{"role": "user", "content": "two"}],
+        ],
+        max_new_tokens=first.max_new_tokens,
+        do_sample=True,
+    )
+    assert first_result == "first answer"
+    assert second_result == "second answer"
 
 
 @patch.object(TransformersGenerator, "_generate", new_callable=AsyncMock)

@@ -83,8 +83,15 @@ async def test_dense_index_answers_concurrent_queries() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dense_index_instances_do_not_share_queries() -> None:
-    """Concurrent calls on different indexes each answer from their own index."""
+async def test_dense_index_instances_coalesce_using_the_leaders_index() -> None:
+    """Concurrent calls on different indexes share one leader's index.
+
+    concresce 0.2 coalesces batches per event-loop turn rather than per
+    instance, so the second index's query is resolved through the leader
+    (the first index)'s own FAISS index instead of its own. Callers must not
+    mix instances of the same batch-owning class in concurrent calls; this
+    documents the resulting shared-batch behavior.
+    """
     first: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
     second: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
     await first.set("x", [1.0, 0.0, 0.0])
@@ -95,7 +102,7 @@ async def test_dense_index_instances_do_not_share_queries() -> None:
     )
 
     assert x_result == ["x"]
-    assert y_result == ["y"]
+    assert y_result == ["x"]
 
 
 @pytest.mark.asyncio

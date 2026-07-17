@@ -36,7 +36,7 @@ RELEVANT = DOCUMENTS[0]
 async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
     """Fusion ranks the on-topic chunk first, reranking keeps it, answer is grounded."""
     # Arrange
-    chunker = SemanticChunker()
+    chunker = SemanticChunker("gpt-3.5-turbo", 1000, 0)
     dense_embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
     sparse_embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
     dense_index: FaissIndex[int, list[float]] = FaissIndex(384, MemoryStore())
@@ -49,7 +49,7 @@ async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
     )
     identifier = 0
     for document in DOCUMENTS:
-        for chunk in chunker.chunks(document):
+        for chunk in await chunker.chunks(document):
             dense, sparse = await asyncio.gather(
                 dense_embedder.embed(chunk), sparse_embedder.embed(chunk)
             )

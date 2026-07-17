@@ -27,7 +27,7 @@ requires-python = ">=3.14"
 dependencies = [
     "belljar>=0.2.0",
     "blake3>=1.0.9",
-    "concresce>=0.1.2",
+    "concresce>=0.2.0",
     "dill>=0.4.1",
     "faiss-cpu>=1.14.3",
     "numpy>=2.4.6",

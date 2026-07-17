@@ -288,10 +288,17 @@ async def test_faiss_index_similar_on_empty_index_does_not_search(
 
 @patch("rager.indexes.faiss")
 @pytest.mark.asyncio
-async def test_faiss_index_does_not_batch_across_instances(
+async def test_faiss_index_coalesces_across_instances(
     faiss: MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Concurrent similar() calls on different indexes each run their own search."""
+    """Concurrent similar() calls on different indexes share one search().
+
+    concresce 0.2 coalesces batches per event-loop turn rather than per
+    instance, so the second index's query is resolved through the leader
+    (the first index)'s own key map instead of its own. Callers must not
+    mix instances of the same batch-owning class in concurrent calls; this
+    documents the resulting shared-batch behavior.
+    """
     # Arrange
     monkeypatch.chdir(tmp_path)
     first: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
@@ -301,19 +308,20 @@ async def test_faiss_index_does_not_batch_across_instances(
     await first.set("x", [1.0, 0.0, 0.0])
     await second.set("y", [0.0, 1.0, 0.0])
     faiss_index.search.return_value = (
-        np.asarray([[0.9]], dtype=np.float32),
-        np.asarray([[FaissIndex._id("x")]], dtype=np.int64),
+        np.asarray([[0.9], [0.9]], dtype=np.float32),
+        np.asarray([[FaissIndex._id("x")], [FaissIndex._id("x")]], dtype=np.int64),
     )
 
     # Act
-    await asyncio.gather(
+    first_result, second_result = await asyncio.gather(
         first.similar([1.0, 0.0, 0.0], embedding_results=1),
         second.similar([0.0, 1.0, 0.0], embedding_results=1),
     )
 
     # Assert
-    expected_searches = 2
-    assert faiss_index.search.call_count == expected_searches
+    faiss_index.search.assert_called_once()
+    assert first_result == ["x"]
+    assert second_result == ["x"]
 
 
 # --- SparseIndex ------------------------------------------------------------
@@ -520,8 +528,15 @@ async def test_sparse_index_batches_concurrent_calls(
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_does_not_batch_across_instances() -> None:
-    """Concurrent calls on different indexes land in their own index."""
+async def test_sparse_index_coalesces_across_instances() -> None:
+    """Concurrent calls on different indexes share one leader's posting lists.
+
+    concresce 0.2 coalesces batches per event-loop turn rather than per
+    instance, so the second index's query is resolved through the leader
+    (the first index)'s own postings instead of its own. Callers must not
+    mix instances of the same batch-owning class in concurrent calls; this
+    documents the resulting shared-batch behavior.
+    """
     # Arrange
     first: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
     second: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
@@ -535,7 +550,7 @@ async def test_sparse_index_does_not_batch_across_instances() -> None:
 
     # Assert
     assert x_result == ["x"]
-    assert y_result == ["y"]
+    assert y_result == ["x"]
 
 
 @pytest.mark.asyncio

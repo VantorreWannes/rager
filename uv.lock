@@ -289,11 +289,11 @@ wheels = [
 
 [[package]]
 name = "concresce"
-version = "0.1.2"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b3/33/ac7d00efc427f4a6ca92b9e7405f5947498532bd0169d2ce5bc8be4283c7/concresce-0.1.2.tar.gz", hash = "sha256:ebf6e9e6a4d6d61d4a499c0e6ea9e0d71420c1b0a256c0277b0057322eef38f6", size = 6543, upload-time = "2026-07-14T21:04:47.448Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/ff/92113a887a1d604a3ebfe5813d28b31e56c29f5ab9d8df857c8e61513010/concresce-0.2.0.tar.gz", hash = "sha256:b6755c6fe93171e9838e95a64a672e653b2b5e1546d6695e546ee0941876074f", size = 5351, upload-time = "2026-07-17T12:13:04.107Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bc/36/79ae217d16e8240a7b96a8697c9b82bbd01e18a59f623952cabd5a277710/concresce-0.1.2-py3-none-any.whl", hash = "sha256:9ed8060d52f78e24572974ec8b78a81df23993bad56d66b627c76c812552a07c", size = 7401, upload-time = "2026-07-14T21:04:46.316Z" },
+    { url = "https://files.pythonhosted.org/packages/be/0d/21ec6f8607c0757888488e14d123d84396f37dca8e6de33e9c0f174a03c6/concresce-0.2.0-py3-none-any.whl", hash = "sha256:a4522d4364582e0a1f0cf1201476539835203b853b87c427c711fdf5a6fe1076", size = 6162, upload-time = "2026-07-17T12:13:02.877Z" },
 ]
 
 [[package]]
@@ -1812,7 +1812,7 @@ dev = [
 requires-dist = [
     { name = "belljar", specifier = ">=0.2.0" },
     { name = "blake3", specifier = ">=1.0.9" },
-    { name = "concresce", specifier = ">=0.1.2" },
+    { name = "concresce", specifier = ">=0.2.0" },
     { name = "dill", specifier = ">=0.4.1" },
     { name = "faiss-cpu", specifier = ">=1.14.3" },
     { name = "numpy", specifier = ">=2.4.6" },

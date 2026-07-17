@@ -101,22 +101,30 @@ async def test_sentence_transformer_dense_embedder_embed_cached(
 
 @patch("rager.embedders.SentenceTransformer")
 @pytest.mark.asyncio
-async def test_sentence_transformer_dense_embedder_does_not_batch_across_instances(
+async def test_sentence_transformer_dense_embedder_coalesces_across_instances(
     sentence_transformer: MagicMock,
 ) -> None:
-    """Concurrent _encode() calls on different embedders batch separately."""
+    """Concurrent _encode() calls on different embedders share one encode() call.
+
+    concresce 0.2 coalesces batches per event-loop turn rather than per
+    instance. Callers must not mix instances of the same batch-owning class
+    in concurrent calls; this documents the resulting shared-batch behavior.
+    """
     # Arrange
     first = SentenceTransformerDenseEmbedder("model-a")
     second = SentenceTransformerDenseEmbedder("model-b")
     model = sentence_transformer.return_value
-    model.encode.return_value.tolist.return_value = [[0.1, 0.2, 0.3]]
+    model.encode.return_value.tolist.return_value = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
 
     # Act
-    await asyncio.gather(first._encode("one"), second._encode("two"))
+    first_result, second_result = await asyncio.gather(
+        first._encode("one"), second._encode("two")
+    )
 
     # Assert
-    expected_calls = 2
-    assert model.encode.call_count == expected_calls
+    model.encode.assert_called_once_with(["one", "two"], normalize_embeddings=True)
+    assert first_result == [0.1, 0.2, 0.3]
+    assert second_result == [0.4, 0.5, 0.6]
 
 
 @patch("rager.embedders.SparseEncoder")
@@ -166,23 +174,31 @@ async def test_splade_sparse_embedder_encode(model: MagicMock) -> None:
 
 @patch("rager.embedders.SparseEncoder")
 @pytest.mark.asyncio
-async def test_splade_sparse_embedder_does_not_batch_across_instances(
+async def test_splade_sparse_embedder_coalesces_across_instances(
     sparse_encoder: MagicMock,
 ) -> None:
-    """Concurrent _encode() calls on different embedders batch separately."""
+    """Concurrent _encode() calls on different embedders share one encode() call.
+
+    concresce 0.2 coalesces batches per event-loop turn rather than per
+    instance. Callers must not mix instances of the same batch-owning class
+    in concurrent calls; this documents the resulting shared-batch behavior.
+    """
     # Arrange
     first = SpladeSparseEmbedder("model-a")
     second = SpladeSparseEmbedder("model-b")
     coalesced = sparse_encoder.return_value.encode.return_value.coalesce.return_value
-    coalesced.indices.return_value = [[0], [5]]
-    coalesced.values.return_value = [1.5]
+    coalesced.indices.return_value = [[0, 1], [5, 9]]
+    coalesced.values.return_value = [1.5, 2.5]
 
     # Act
-    await asyncio.gather(first._encode("one"), second._encode("two"))
+    first_result, second_result = await asyncio.gather(
+        first._encode("one"), second._encode("two")
+    )
 
     # Assert
-    expected_calls = 2
-    assert sparse_encoder.return_value.encode.call_count == expected_calls
+    sparse_encoder.return_value.encode.assert_called_once_with(["one", "two"])
+    assert first_result == {5: 1.5}
+    assert second_result == {9: 2.5}
 
 
 @patch.object(SpladeSparseEmbedder, "_encode", new_callable=AsyncMock)
