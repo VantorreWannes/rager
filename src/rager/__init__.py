@@ -5,8 +5,8 @@ import logging
 from rager.chunkers import Chunker, SemanticChunker
 from rager.embedders import (
     Embedder,
-    SentenceTransformerDenseEmbedder,
-    SpladeSparseEmbedder,
+    SentenceTransformerEmbedder,
+    SpladeEmbedder,
 )
 from rager.fusers import BordaCountFuser, Fuser, ReciprocalRankFuser
 from rager.generators import Generator, TransformersGenerator
@@ -44,10 +44,10 @@ __all__ = [
     "ReciprocalRankFuser",
     "Scorer",
     "SemanticChunker",
-    "SentenceTransformerDenseEmbedder",
+    "SentenceTransformerEmbedder",
     "SparseEmbedding",
     "SparseIndex",
-    "SpladeSparseEmbedder",
+    "SpladeEmbedder",
     "Store",
     "TransformersGenerator",
     "UnstructuredFileParser",

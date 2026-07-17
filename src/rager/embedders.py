@@ -32,7 +32,7 @@ class Embedder[E](Protocol):
 class BaseEmbedder[E](ABC):
     """Abstract helper base deriving the ``Embedder`` protocol from two operations.
 
-    Subclasses implement ``_jar`` and ``_encode``; ``embed`` seals every
+    Subclasses implement ``_jar`` and ``_batched``; ``embed`` seals every
     encoded embedding in the jar and returns it from there on later calls.
     """
 
@@ -41,8 +41,15 @@ class BaseEmbedder[E](ABC):
         """Open a jar positioned at the identity of the given chunk."""
 
     @abstractmethod
-    def _encode(self, chunk: str) -> Awaitable[E]:
-        """Convert a text chunk into a vector representation."""
+    def _batched(self, chunks: list[str]) -> Awaitable[list[E]]:
+        """Convert a batch of text chunks into vector representations."""
+
+    @concresce.batch
+    async def _embed(self, chunk: str) -> E:
+        """Convert a single text chunk into a vector representation."""
+        chunks = await concresce.collect(chunk)
+        embeddings = await self._batched(chunks)
+        return concresce.scatter(embeddings)
 
     async def embed(self, chunk: str) -> E:
         """Convert a text chunk into a vector representation."""
@@ -50,13 +57,14 @@ class BaseEmbedder[E](ABC):
         if (cached := jar.get()) is not None:
             return cached
         logger.debug("Cache miss; embedding chunk of %d characters", len(chunk))
-        return jar.set(await self._encode(chunk))
+        embedding = await self._embed(chunk)
+        return jar.set(embedding)
 
 
-class SentenceTransformerDenseEmbedder(BaseEmbedder[DenseEmbedding]):
+class SentenceTransformerEmbedder(BaseEmbedder[DenseEmbedding]):
     """Dense embedding using SentenceTransformer."""
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
+    def __init__(self, model_name: str) -> None:
         """Initialize the dense embedder with a specific model."""
         self.model_name = model_name
 
@@ -75,22 +83,19 @@ class SentenceTransformerDenseEmbedder(BaseEmbedder[DenseEmbedding]):
         jar.include(chunk)
         return jar
 
-    @concresce.batch
     @override
-    async def _encode(self, chunk: str) -> DenseEmbedding:
-        """Convert a text chunk into a vector representation."""
-        chunks = await concresce.collect(chunk)
+    async def _batched(self, chunks: list[str]) -> list[DenseEmbedding]:
+        """Convert a batch of text chunks into vector representations."""
         logger.debug(
             "Encoding batch of %d chunks with %r", len(chunks), self.model_name
         )
-        embeddings = self.model.encode(chunks, normalize_embeddings=True).tolist()
-        return concresce.scatter(embeddings)
+        return self.model.encode(chunks, normalize_embeddings=True).tolist()
 
 
-class SpladeSparseEmbedder(BaseEmbedder[SparseEmbedding]):
+class SpladeEmbedder(BaseEmbedder[SparseEmbedding]):
     """Sparse embedding using a SPLADE SparseEncoder."""
 
-    def __init__(self, model_name: str = "prithivida/Splade_PP_en_v1") -> None:
+    def __init__(self, model_name: str) -> None:
         """Initialize the sparse embedder with a specific model."""
         self.model_name = model_name
 
@@ -134,14 +139,11 @@ class SpladeSparseEmbedder(BaseEmbedder[SparseEmbedding]):
         jar.include(chunk)
         return jar
 
-    @concresce.batch
     @override
-    async def _encode(self, chunk: str) -> SparseEmbedding:
-        """Convert a text chunk into a sparse vector representation."""
-        chunks = await concresce.collect(chunk)
+    async def _batched(self, chunks: list[str]) -> list[SparseEmbedding]:
+        """Convert a batch of text chunks into sparse vector representations."""
         logger.debug(
             "Encoding batch of %d chunks with %r", len(chunks), self.model_name
         )
         coalesced = self.model.encode(chunks).coalesce()
-        embeddings = self._coalesced_to_embeddings(coalesced, len(chunks))
-        return concresce.scatter(embeddings)
+        return self._coalesced_to_embeddings(coalesced, len(chunks))

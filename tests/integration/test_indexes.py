@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from rager.embedders import SentenceTransformerDenseEmbedder, SpladeSparseEmbedder
+from rager.embedders import SentenceTransformerEmbedder, SpladeEmbedder
 from rager.indexes import FaissIndex, SparseIndex
 from rager.stores import FileStore, MemoryStore
 
@@ -119,7 +119,7 @@ async def test_sparse_index_ranks_nearest_first() -> None:
 @pytest.mark.asyncio
 async def test_dense_index_with_dense_embedder() -> None:
     """Embeddings from the dense embedder retrieve the semantically closest chunk."""
-    embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
+    embedder = SentenceTransformerEmbedder("all-MiniLM-L6-v2")
     index: FaissIndex[str, list[float]] = FaissIndex(384, MemoryStore())
     await index.set("cats", await embedder.embed("Cats purr when they are happy."))
     await index.set(
@@ -135,7 +135,7 @@ async def test_dense_index_with_dense_embedder() -> None:
 @pytest.mark.asyncio
 async def test_sparse_index_with_sparse_embedder() -> None:
     """Embeddings from the sparse embedder retrieve the closest chunk."""
-    embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
+    embedder = SpladeEmbedder("prithivida/Splade_PP_en_v1")
     index: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
     await index.set("cats", await embedder.embed("Cats purr when they are happy."))
     await index.set(
@@ -151,7 +151,7 @@ async def test_sparse_index_with_sparse_embedder() -> None:
 @pytest.mark.asyncio
 async def test_sparse_index_with_file_backed_stores() -> None:
     """Embeddings sealed on disk through FileStores retrieve the closest chunk."""
-    embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
+    embedder = SpladeEmbedder("prithivida/Splade_PP_en_v1")
     index: SparseIndex[str] = SparseIndex(FileStore(), FileStore())
     await index.set("cats", await embedder.embed("Cats purr when they are happy."))
     await index.set(

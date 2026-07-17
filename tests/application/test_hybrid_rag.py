@@ -15,7 +15,7 @@ import asyncio
 import pytest
 
 from rager.chunkers import SemanticChunker
-from rager.embedders import SentenceTransformerDenseEmbedder, SpladeSparseEmbedder
+from rager.embedders import SentenceTransformerEmbedder, SpladeEmbedder
 from rager.fusers import ReciprocalRankFuser
 from rager.generators import TransformersGenerator
 from rager.indexes import FaissIndex, SparseIndex
@@ -37,8 +37,8 @@ async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
     """Fusion ranks the on-topic chunk first, reranking keeps it, answer is grounded."""
     # Arrange
     chunker = SemanticChunker("gpt-3.5-turbo", 1000, 0)
-    dense_embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
-    sparse_embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
+    dense_embedder = SentenceTransformerEmbedder("all-MiniLM-L6-v2")
+    sparse_embedder = SpladeEmbedder("prithivida/Splade_PP_en_v1")
     dense_index: FaissIndex[int, list[float]] = FaissIndex(384, MemoryStore())
     sparse_index: SparseIndex[int] = SparseIndex(MemoryStore(), MemoryStore())
     chunks: MemoryStore[int, str] = MemoryStore()

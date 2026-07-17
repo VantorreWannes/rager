@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from rager.chunkers import SemanticChunker
-from rager.embedders import SentenceTransformerDenseEmbedder
+from rager.embedders import SentenceTransformerEmbedder
 from rager.indexes import FaissIndex
 from rager.parsers import CsvPageParser, MarkdownPageParser, PdfPageParser
 from rager.stores import MemoryStore
@@ -42,7 +42,7 @@ async def test_file_ingestion_round_trips(
     """Parsing, chunking, and indexing a file lets its chunks retrieve themselves."""
     # Arrange
     file: Path = request.getfixturevalue(file_fixture)
-    embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
+    embedder = SentenceTransformerEmbedder("all-MiniLM-L6-v2")
     index: FaissIndex[int, list[float]] = FaissIndex(384, MemoryStore())
     chunks: MemoryStore[int, str] = MemoryStore()
     chunker = SemanticChunker("gpt-3.5-turbo", 1000, 0)
