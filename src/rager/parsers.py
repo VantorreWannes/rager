@@ -2,6 +2,7 @@
 
 import logging
 from abc import ABC, abstractmethod
+from itertools import groupby
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, override
 
@@ -79,7 +80,11 @@ class UnstructuredFileParser(BaseParser[Path]):
             combine_text_under_n_chars=500,
             overlap=150,
         )
-        return [element.text for element in elements]
+        by_page = groupby(
+            sorted(elements, key=lambda e: e.metadata.page_number or -1),
+            key=lambda e: e.metadata.page_number or -1,
+        )
+        return ["\n".join(e.text for e in group) for _, group in by_page]
 
     @override
     def id(self, file: Path) -> Hash:
