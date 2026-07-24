@@ -42,9 +42,12 @@ class BaseParser[D, V](ABC):
     def _batched(self, datas: list[D]) -> Awaitable[list[tuple[V, ...]]]:
         """Extract text units from each data instance."""
 
-    @concresce.batch
-    async def _units(self, data: D) -> tuple[V, ...]:
+    @abstractmethod
+    def _units(self, data: D) -> Awaitable[tuple[V, ...]]:
         """Extract text units from the data."""
+
+    async def _collect(self, data: D) -> tuple[V, ...]:
+        """Pool data into the current batch and return this caller's units."""
         datas = await concresce.collect(data)
         results = await self._batched(datas)
         return concresce.scatter(results)
@@ -62,6 +65,12 @@ class BaseParser[D, V](ABC):
 
 class UnstructuredFileParser(BaseParser[Path, Element]):
     """Parser for unstructured files."""
+
+    @override
+    @concresce.batch
+    async def _units(self, data: Path) -> tuple[Element, ...]:
+        """Extract text units from the data."""
+        return await self._collect(data)
 
     @override
     def _jar(self, data: Path) -> Jar[tuple[Element, ...]]:
@@ -86,6 +95,12 @@ class UnstructuredPageParser(BaseParser[Path, str]):
     def __init__(self) -> None:
         """Initialize the page parser."""
         self._file_parser = UnstructuredFileParser()
+
+    @override
+    @concresce.batch
+    async def _units(self, data: Path) -> tuple[str, ...]:
+        """Extract text units from the data."""
+        return await self._collect(data)
 
     @override
     def _jar(self, data: Path) -> Jar[tuple[str, ...]]:

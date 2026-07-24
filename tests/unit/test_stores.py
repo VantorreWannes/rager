@@ -37,7 +37,7 @@ def test_base_store_is_abstract() -> None:
     """BaseStore cannot be instantiated without the four core operations."""
     # Act & Assert
     with pytest.raises(TypeError):
-        BaseStore()  # type: ignore[abstract]
+        BaseStore()
 
 
 def test_memory_store_add_and_get() -> None:

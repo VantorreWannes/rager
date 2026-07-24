@@ -31,9 +31,12 @@ class BaseFuser[V: Hashable](ABC):
     def _batched(self, ranks: list[int], sizes: list[int]) -> Awaitable[list[float]]:
         """Return the weights of holding 1-based ``ranks`` in rankings of ``sizes``."""
 
-    @concresce.batch
-    async def _weight(self, rank: int, size: int) -> float:
+    @abstractmethod
+    def _weight(self, rank: int, size: int) -> Awaitable[float]:
         """Return the weight of holding 1-based ``rank`` in a ranking of ``size``."""
+
+    async def _collect(self, rank: int, size: int) -> float:
+        """Pool a weight query into the current batch."""
         collected = await concresce.collect((rank, size))
         ranks = [rank for rank, _ in collected]
         sizes = [size for _, size in collected]
@@ -61,6 +64,12 @@ class ReciprocalRankFuser[V: Hashable](BaseFuser[V]):
         self.k = k
 
     @override
+    @concresce.batch
+    async def _weight(self, rank: int, size: int) -> float:
+        """Return the weight of holding 1-based ``rank`` in a ranking of ``size``."""
+        return await self._collect(rank, size)
+
+    @override
     async def _batched(self, ranks: list[int], sizes: list[int]) -> list[float]:
         """Return the reciprocal rank weights for a batch of ranks and sizes."""
         return [1 / (self.k + rank) for rank in ranks]
@@ -68,6 +77,12 @@ class ReciprocalRankFuser[V: Hashable](BaseFuser[V]):
 
 class BordaCountFuser[V: Hashable](BaseFuser[V]):
     """Fuser that combines ranked lists by Borda count."""
+
+    @override
+    @concresce.batch
+    async def _weight(self, rank: int, size: int) -> float:
+        """Return the weight of holding 1-based ``rank`` in a ranking of ``size``."""
+        return await self._collect(rank, size)
 
     @override
     async def _batched(self, ranks: list[int], sizes: list[int]) -> list[float]:

@@ -44,9 +44,12 @@ class BaseEmbedder[E](ABC):
     def _batched(self, chunks: list[str]) -> Awaitable[list[E]]:
         """Convert a batch of text chunks into vector representations."""
 
-    @concresce.batch
-    async def _embed(self, chunk: str) -> E:
+    @abstractmethod
+    def _embed(self, chunk: str) -> Awaitable[E]:
         """Convert a single text chunk into a vector representation."""
+
+    async def _collect(self, chunk: str) -> E:
+        """Pool a chunk into the current batch and return its embedding."""
         chunks = await concresce.collect(chunk)
         embeddings = await self._batched(chunks)
         return concresce.scatter(embeddings)
@@ -73,6 +76,12 @@ class SentenceTransformerEmbedder(BaseEmbedder[DenseEmbedding]):
         """Load the SentenceTransformer model."""
         logger.info("Loading SentenceTransformer model %r", self.model_name)
         return SentenceTransformer(self.model_name)
+
+    @override
+    @concresce.batch
+    async def _embed(self, chunk: str) -> DenseEmbedding:
+        """Convert a single text chunk into a vector representation."""
+        return await self._collect(chunk)
 
     @override
     def _jar(self, chunk: str) -> Jar[DenseEmbedding]:
@@ -129,6 +138,12 @@ class SpladeEmbedder(BaseEmbedder[SparseEmbedding]):
     ) -> list[SparseEmbedding]:
         """Split a coalesced sparse tensor into one weight map per input row."""
         return cls._group_by_row(cls._decode_entries(coalesced), count)
+
+    @override
+    @concresce.batch
+    async def _embed(self, chunk: str) -> SparseEmbedding:
+        """Convert a single text chunk into a sparse vector representation."""
+        return await self._collect(chunk)
 
     @override
     def _jar(self, chunk: str) -> Jar[SparseEmbedding]:
