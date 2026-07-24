@@ -10,7 +10,7 @@ nothing is hidden behind a pipeline.
 import pytest
 
 from rager.chunkers import SemanticChunker
-from rager.embedders import SentenceTransformerDenseEmbedder
+from rager.embedders import SentenceTransformerEmbedder
 from rager.generators import TransformersGenerator
 from rager.indexes import FaissIndex
 from rager.stores import MemoryStore
@@ -28,8 +28,8 @@ DOCUMENTS = [
 async def test_dense_rag_retrieves_and_answers_from_context() -> None:
     """Dense retrieval surfaces the on-topic chunk and grounds the answer."""
     # Arrange
-    chunker = SemanticChunker()
-    embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
+    chunker = SemanticChunker("gpt-3.5-turbo", 1000, 0)
+    embedder = SentenceTransformerEmbedder("all-MiniLM-L6-v2")
     index: FaissIndex[int, list[float]] = FaissIndex(384, MemoryStore())
     chunks: MemoryStore[int, str] = MemoryStore()
     generator = TransformersGenerator(
@@ -37,7 +37,7 @@ async def test_dense_rag_retrieves_and_answers_from_context() -> None:
     )
     identifier = 0
     for document in DOCUMENTS:
-        for chunk in chunker.chunks(document):
+        for chunk in await chunker.chunks(document):
             await index.set(identifier, await embedder.embed(chunk))
             chunks.set(identifier, chunk)
             identifier += 1

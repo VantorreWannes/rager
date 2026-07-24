@@ -1,7 +1,7 @@
 """Unit tests for indexes."""
 
 import asyncio
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, cast, override
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -29,9 +29,6 @@ def dense_index(
 def sparse_index() -> SparseIndex[str]:
     """Return a SparseIndex backed by in-memory stores."""
     return SparseIndex(MemoryStore(), MemoryStore())
-
-
-# --- FaissIndex, real FAISS -------------------------------------------------
 
 
 def test_faiss_index_id_is_deterministic() -> None:
@@ -105,7 +102,7 @@ async def test_faiss_index_similar_ranks_nearest_first(
     await dense_index.set("z", [0.0, 0.0, 1.0])
 
     # Act & Assert
-    assert await dense_index.similar([0.9, 0.4, 0.1], embedding_results=3) == [
+    assert await dense_index._similar([0.9, 0.4, 0.1], embedding_results=3) == [
         "x",
         "y",
         "z",
@@ -122,7 +119,7 @@ async def test_faiss_index_similar_caps_results(
     await dense_index.set("y", [0.9, 0.1, 0.0])
 
     # Act & Assert
-    assert await dense_index.similar([1.0, 0.0, 0.0], embedding_results=1) == ["x"]
+    assert await dense_index._similar([1.0, 0.0, 0.0], embedding_results=1) == ["x"]
 
 
 @pytest.mark.asyncio
@@ -131,7 +128,42 @@ async def test_faiss_index_similar_on_empty_index(
 ) -> None:
     """similar() on an index with no embeddings returns no keys."""
     # Act & Assert
+    assert await dense_index._similar([1.0, 0.0, 0.0]) == []
+
+
+@pytest.mark.asyncio
+async def test_faiss_index_similar_seals_and_reuses_the_jar(
+    dense_index: FaissIndex[str, list[float]],
+) -> None:
+    """similar() serves a repeated query from the jar without a second search."""
+    # Arrange
+    await dense_index.set("x", [1.0, 0.0, 0.0])
+
+    # Act & Assert
+    assert await dense_index.similar([1.0, 0.0, 0.0]) == ["x"]
+    await dense_index.remove("x")
     assert await dense_index.similar([1.0, 0.0, 0.0]) == []
+
+
+@pytest.mark.asyncio
+async def test_faiss_index_to_rows_reshapes_a_single_row(
+    dense_index: FaissIndex[str, list[float]],
+) -> None:
+    """_to_rows() promotes a flat embedding into a one-row matrix."""
+    # Act
+    rows = dense_index._to_rows(cast("list[list[float]]", [1.0, 0.0, 0.0]))
+
+    # Assert
+    np.testing.assert_array_equal(rows, np.asarray([[1.0, 0.0, 0.0]], np.float32))
+
+
+@pytest.mark.asyncio
+async def test_faiss_index_batched_get_of_no_keys_returns_nothing(
+    dense_index: FaissIndex[str, list[float]],
+) -> None:
+    """_batched_get() with no keys short-circuits before touching FAISS."""
+    # Act & Assert
+    assert await dense_index._batched_get([]) == []
 
 
 @pytest.mark.asyncio
@@ -146,7 +178,7 @@ async def test_faiss_index_overwrite_reuses_the_key_slot(
     # Assert
     assert dense_index.index.ntotal == 1
     assert await dense_index.get("x") == [0.0, 1.0, 0.0]
-    assert await dense_index.similar([0.0, 1.0, 0.0], embedding_results=1) == ["x"]
+    assert await dense_index._similar([0.0, 1.0, 0.0], embedding_results=1) == ["x"]
 
 
 @pytest.mark.asyncio
@@ -163,7 +195,7 @@ async def test_faiss_index_remove_drops_key_from_results(
 
     # Assert
     assert await dense_index.keys() == ["y"]
-    assert await dense_index.similar([1.0, 0.0, 0.0], embedding_results=2) == ["y"]
+    assert await dense_index._similar([1.0, 0.0, 0.0], embedding_results=2) == ["y"]
 
 
 @pytest.mark.asyncio
@@ -179,7 +211,7 @@ async def test_faiss_index_remove_of_absent_key_is_noop(
 
     # Assert
     assert await dense_index.keys() == ["x"]
-    assert await dense_index.similar([1.0, 0.0, 0.0]) == ["x"]
+    assert await dense_index._similar([1.0, 0.0, 0.0]) == ["x"]
 
 
 @pytest.mark.asyncio
@@ -196,7 +228,7 @@ async def test_faiss_index_can_use_a_file_backed_key_map(
     await index.set("y", [0.0, 1.0, 0.0])
 
     # Assert
-    assert await index.similar([1.0, 0.1, 0.0], embedding_results=2) == ["x", "y"]
+    assert await index._similar([1.0, 0.1, 0.0], embedding_results=2) == ["x", "y"]
 
 
 # --- FaissIndex, mocked FAISS wiring ----------------------------------------
@@ -257,8 +289,8 @@ async def test_faiss_index_similar_coalesces_concurrent_queries(
 
     # Act
     first, second = await asyncio.gather(
-        index.similar([1.0, 0.0, 0.0], embedding_results=2),
-        index.similar([0.0, 1.0, 0.0], embedding_results=2),
+        index._similar([1.0, 0.0, 0.0], embedding_results=2),
+        index._similar([0.0, 1.0, 0.0], embedding_results=2),
     )
 
     # Assert
@@ -279,7 +311,7 @@ async def test_faiss_index_similar_on_empty_index_does_not_search(
     faiss.IndexIDMap.return_value.ntotal = 0
 
     # Act
-    result = await index.similar([1.0, 0.0, 0.0])
+    result = await index._similar([1.0, 0.0, 0.0])
 
     # Assert
     assert result == []
@@ -288,10 +320,17 @@ async def test_faiss_index_similar_on_empty_index_does_not_search(
 
 @patch("rager.indexes.faiss")
 @pytest.mark.asyncio
-async def test_faiss_index_does_not_batch_across_instances(
+async def test_faiss_index_coalesces_across_instances(
     faiss: MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Concurrent similar() calls on different indexes each run their own search."""
+    """Concurrent similar() calls on different indexes share one search().
+
+    concresce 0.2 coalesces batches per event-loop turn rather than per
+    instance, so the second index's query is resolved through the leader
+    (the first index)'s own key map instead of its own. Callers must not
+    mix instances of the same batch-owning class in concurrent calls; this
+    documents the resulting shared-batch behavior.
+    """
     # Arrange
     monkeypatch.chdir(tmp_path)
     first: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
@@ -301,19 +340,20 @@ async def test_faiss_index_does_not_batch_across_instances(
     await first.set("x", [1.0, 0.0, 0.0])
     await second.set("y", [0.0, 1.0, 0.0])
     faiss_index.search.return_value = (
-        np.asarray([[0.9]], dtype=np.float32),
-        np.asarray([[FaissIndex._id("x")]], dtype=np.int64),
+        np.asarray([[0.9], [0.9]], dtype=np.float32),
+        np.asarray([[FaissIndex._id("x")], [FaissIndex._id("x")]], dtype=np.int64),
     )
 
     # Act
-    await asyncio.gather(
-        first.similar([1.0, 0.0, 0.0], embedding_results=1),
-        second.similar([0.0, 1.0, 0.0], embedding_results=1),
+    first_result, second_result = await asyncio.gather(
+        first._similar([1.0, 0.0, 0.0], embedding_results=1),
+        second._similar([0.0, 1.0, 0.0], embedding_results=1),
     )
 
     # Assert
-    expected_searches = 2
-    assert faiss_index.search.call_count == expected_searches
+    faiss_index.search.assert_called_once()
+    assert first_result == ["x"]
+    assert second_result == ["x"]
 
 
 # --- SparseIndex ------------------------------------------------------------
@@ -520,8 +560,15 @@ async def test_sparse_index_batches_concurrent_calls(
 
 
 @pytest.mark.asyncio
-async def test_sparse_index_does_not_batch_across_instances() -> None:
-    """Concurrent calls on different indexes land in their own index."""
+async def test_sparse_index_coalesces_across_instances() -> None:
+    """Concurrent calls on different indexes share one leader's posting lists.
+
+    concresce 0.2 coalesces batches per event-loop turn rather than per
+    instance, so the second index's query is resolved through the leader
+    (the first index)'s own postings instead of its own. Callers must not
+    mix instances of the same batch-owning class in concurrent calls; this
+    documents the resulting shared-batch behavior.
+    """
     # Arrange
     first: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
     second: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
@@ -535,7 +582,7 @@ async def test_sparse_index_does_not_batch_across_instances() -> None:
 
     # Assert
     assert x_result == ["x"]
-    assert y_result == ["y"]
+    assert y_result == ["x"]
 
 
 @pytest.mark.asyncio

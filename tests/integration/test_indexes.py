@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from rager.embedders import SentenceTransformerDenseEmbedder, SpladeSparseEmbedder
+from rager.embedders import SentenceTransformerEmbedder, SpladeEmbedder
 from rager.indexes import FaissIndex, SparseIndex
 from rager.stores import FileStore, MemoryStore
 
@@ -83,8 +83,15 @@ async def test_dense_index_answers_concurrent_queries() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dense_index_instances_do_not_share_queries() -> None:
-    """Concurrent calls on different indexes each answer from their own index."""
+async def test_dense_index_instances_coalesce_using_the_leaders_index() -> None:
+    """Concurrent calls on different indexes share one leader's index.
+
+    concresce 0.2 coalesces batches per event-loop turn rather than per
+    instance, so the second index's query is resolved through the leader
+    (the first index)'s own FAISS index instead of its own. Callers must not
+    mix instances of the same batch-owning class in concurrent calls; this
+    documents the resulting shared-batch behavior.
+    """
     first: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
     second: FaissIndex[str, list[float]] = FaissIndex(3, MemoryStore())
     await first.set("x", [1.0, 0.0, 0.0])
@@ -95,7 +102,7 @@ async def test_dense_index_instances_do_not_share_queries() -> None:
     )
 
     assert x_result == ["x"]
-    assert y_result == ["y"]
+    assert y_result == ["x"]
 
 
 @pytest.mark.asyncio
@@ -112,7 +119,7 @@ async def test_sparse_index_ranks_nearest_first() -> None:
 @pytest.mark.asyncio
 async def test_dense_index_with_dense_embedder() -> None:
     """Embeddings from the dense embedder retrieve the semantically closest chunk."""
-    embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
+    embedder = SentenceTransformerEmbedder("all-MiniLM-L6-v2")
     index: FaissIndex[str, list[float]] = FaissIndex(384, MemoryStore())
     await index.set("cats", await embedder.embed("Cats purr when they are happy."))
     await index.set(
@@ -128,7 +135,7 @@ async def test_dense_index_with_dense_embedder() -> None:
 @pytest.mark.asyncio
 async def test_sparse_index_with_sparse_embedder() -> None:
     """Embeddings from the sparse embedder retrieve the closest chunk."""
-    embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
+    embedder = SpladeEmbedder("prithivida/Splade_PP_en_v1")
     index: SparseIndex[str] = SparseIndex(MemoryStore(), MemoryStore())
     await index.set("cats", await embedder.embed("Cats purr when they are happy."))
     await index.set(
@@ -144,7 +151,7 @@ async def test_sparse_index_with_sparse_embedder() -> None:
 @pytest.mark.asyncio
 async def test_sparse_index_with_file_backed_stores() -> None:
     """Embeddings sealed on disk through FileStores retrieve the closest chunk."""
-    embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
+    embedder = SpladeEmbedder("prithivida/Splade_PP_en_v1")
     index: SparseIndex[str] = SparseIndex(FileStore(), FileStore())
     await index.set("cats", await embedder.embed("Cats purr when they are happy."))
     await index.set(

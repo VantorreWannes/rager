@@ -1,6 +1,6 @@
 [project]
 name = "rager"
-version = "0.3.2"
+version = "0.4.0"
 description = "Caching based RAG primitives"
 readme = "README.md"
 authors = [
@@ -27,7 +27,7 @@ requires-python = ">=3.14"
 dependencies = [
     "belljar>=0.2.0",
     "blake3>=1.0.9",
-    "concresce>=0.1.2",
+    "concresce>=0.2.0",
     "dill>=0.4.1",
     "faiss-cpu>=1.14.3",
     "numpy>=2.4.6",
@@ -63,7 +63,7 @@ markers = [
 
 [tool.ruff.lint]
 select = ["ALL"]
-ignore = ["D203", "D213", "COM812", "ISC001"]
+ignore = ["D203", "D213", "COM812", "ISC001", "CPY001"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]

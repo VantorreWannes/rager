@@ -7,7 +7,7 @@ ingestion must disappear from results once removed, leaving the rest intact.
 
 import pytest
 
-from rager.embedders import SentenceTransformerDenseEmbedder
+from rager.embedders import SentenceTransformerEmbedder
 from rager.indexes import FaissIndex
 from rager.stores import MemoryStore
 
@@ -24,7 +24,7 @@ DOCUMENTS = [
 async def test_removed_document_drops_out_of_retrieval() -> None:
     """A removed chunk stops appearing in results while the others remain."""
     # Arrange
-    embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
+    embedder = SentenceTransformerEmbedder("all-MiniLM-L6-v2")
     index: FaissIndex[int, list[float]] = FaissIndex(384, MemoryStore())
     chunks: MemoryStore[int, str] = MemoryStore()
     keys: dict[str, int] = {}

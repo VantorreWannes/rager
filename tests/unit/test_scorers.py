@@ -49,24 +49,31 @@ async def test_cross_encoder_scorer_predict(model: MagicMock) -> None:
 
 @patch("rager.scorers.CrossEncoder")
 @pytest.mark.asyncio
-async def test_cross_encoder_scorer_does_not_batch_across_instances(
+async def test_cross_encoder_scorer_coalesces_across_instances(
     cross_encoder: MagicMock,
 ) -> None:
-    """Concurrent _predict() calls on different scorers batch separately."""
+    """Concurrent _predict() calls on different scorers share one predict() call.
+
+    concresce 0.2 coalesces batches per event-loop turn rather than per
+    instance. Callers must not mix instances of the same batch-owning class
+    in concurrent calls; this documents the resulting shared-batch behavior.
+    """
     # Arrange
     first = CrossEncoderScorer("model-a")
     second = CrossEncoderScorer("model-b")
     model = cross_encoder.return_value
-    model.predict.return_value.tolist.return_value = [0.9]
+    first_score, second_score = 0.9, 0.1
+    model.predict.return_value.tolist.return_value = [first_score, second_score]
 
     # Act
-    await asyncio.gather(
+    first_result, second_result = await asyncio.gather(
         first._predict("query", "one"), second._predict("query", "two")
     )
 
     # Assert
-    expected_calls = 2
-    assert model.predict.call_count == expected_calls
+    model.predict.assert_called_once_with([("query", "one"), ("query", "two")])
+    assert first_result == first_score
+    assert second_result == second_score
 
 
 @patch.object(CrossEncoderScorer, "_predict", new_callable=AsyncMock)

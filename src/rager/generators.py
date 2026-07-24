@@ -27,19 +27,21 @@ class Generator(Protocol):
 
 
 class BaseGenerator(ABC):
-    """Abstract helper base deriving the ``Generator`` protocol from two operations.
-
-    Subclasses implement ``_jar`` and ``_generate``; ``prompt`` seals every
-    generated answer in the jar and returns it from there on later calls.
-    """
+    """Abstract helper base deriving the ``Generator`` protocol from two operations."""
 
     @abstractmethod
     def _jar(self, query: str) -> Jar[str]:
         """Open a jar positioned at the identity of the given query."""
 
     @abstractmethod
-    def _generate(self, query: str) -> Awaitable[str]:
+    def _batched_generate(self, queries: list[str]) -> Awaitable[list[str]]:
         """Generate an answer to the query."""
+
+    @concresce.batch
+    async def _generate(self, query: str) -> str:
+        queries = await concresce.collect(query)
+        answers = await self._batched_generate(queries)
+        return concresce.scatter(answers)
 
     async def prompt(self, query: str) -> str:
         """Generate content based on the query."""
@@ -80,11 +82,9 @@ class TransformersGenerator(BaseGenerator):
         jar.include(query)
         return jar
 
-    @concresce.batch
     @override
-    async def _generate(self, query: str) -> str:
-        """Generate an answer for each query in the collected batch."""
-        queries = await concresce.collect(query)
+    async def _batched_generate(self, queries: list[str]) -> list[str]:
+        """Generate an answer to the query."""
         logger.debug(
             "Generating answers for a batch of %d queries with %r (max_new_tokens=%d)",
             len(queries),
@@ -97,5 +97,4 @@ class TransformersGenerator(BaseGenerator):
             max_new_tokens=self.max_new_tokens,
             do_sample=True,
         )
-        answers = [output[0]["generated_text"][-1]["content"] for output in outputs]
-        return concresce.scatter(answers)
+        return [output[0]["generated_text"][-1]["content"] for output in outputs]

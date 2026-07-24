@@ -15,7 +15,7 @@ import asyncio
 import pytest
 
 from rager.chunkers import SemanticChunker
-from rager.embedders import SentenceTransformerDenseEmbedder, SpladeSparseEmbedder
+from rager.embedders import SentenceTransformerEmbedder, SpladeEmbedder
 from rager.fusers import ReciprocalRankFuser
 from rager.generators import TransformersGenerator
 from rager.indexes import FaissIndex, SparseIndex
@@ -36,9 +36,9 @@ RELEVANT = DOCUMENTS[0]
 async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
     """Fusion ranks the on-topic chunk first, reranking keeps it, answer is grounded."""
     # Arrange
-    chunker = SemanticChunker()
-    dense_embedder = SentenceTransformerDenseEmbedder("all-MiniLM-L6-v2")
-    sparse_embedder = SpladeSparseEmbedder("prithivida/Splade_PP_en_v1")
+    chunker = SemanticChunker("gpt-3.5-turbo", 1000, 0)
+    dense_embedder = SentenceTransformerEmbedder("all-MiniLM-L6-v2")
+    sparse_embedder = SpladeEmbedder("prithivida/Splade_PP_en_v1")
     dense_index: FaissIndex[int, list[float]] = FaissIndex(384, MemoryStore())
     sparse_index: SparseIndex[int] = SparseIndex(MemoryStore(), MemoryStore())
     chunks: MemoryStore[int, str] = MemoryStore()
@@ -49,7 +49,7 @@ async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
     )
     identifier = 0
     for document in DOCUMENTS:
-        for chunk in chunker.chunks(document):
+        for chunk in await chunker.chunks(document):
             dense, sparse = await asyncio.gather(
                 dense_embedder.embed(chunk), sparse_embedder.embed(chunk)
             )
@@ -65,7 +65,7 @@ async def test_hybrid_rag_fuses_reranks_and_answers() -> None:
         sparse_index.similar(await sparse_embedder.embed(query)),
     )
     candidates: list[str] = []
-    for key in fuser.fuse(dense_ranking, sparse_ranking):
+    for key in await fuser.fuse(dense_ranking, sparse_ranking):
         text = chunks.get(key)
         if text is not None and text not in candidates:
             candidates.append(text)
