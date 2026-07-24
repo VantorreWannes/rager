@@ -1,6 +1,6 @@
 [project]
 name = "rager"
-version = "0.4.0"
+version = "0.4.1"
 description = "Caching based RAG primitives"
 readme = "README.md"
 authors = [

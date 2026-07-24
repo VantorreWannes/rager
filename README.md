@@ -48,10 +48,11 @@ Every stage is a `Protocol` with concrete implementations. Each module also ship
 
 ### Parsers — extract text units from files
 
-- **`Parser`** — protocol: `units(file)` returns text units, `id(file)` returns the content `Hash`.
-- **`BaseParser`** — derives a cached `units()` from `_jar`, `_parse`, and `id`.
-- **`UnstructuredFileParser`** — parses any file supported by [`unstructured`](https://github.com/Unstructured-IO/unstructured).
-- **`PdfFileParser`**, **`MarkdownFileParser`**, **`CsvFileParser`** — aliases of `UnstructuredFileParser` for readable call sites.
+- **`Parser`** — protocol: `units(file)` returns text units.
+- **`BaseParser`** — derives a cached `units()` from `_jar`, `_batched`, and `_units`; the jar is keyed by the file's `blake3` content hash.
+- **`UnstructuredFileParser`** — parses any file supported by [`unstructured`](https://github.com/Unstructured-IO/unstructured), returning its elements.
+- **`UnstructuredPageParser`** — composes a file parser and returns one string per page, grouping elements by page number.
+- **`PdfFileParser`**, **`MarkdownFileParser`**, **`CsvFileParser`** — aliases of `UnstructuredFileParser`; **`PdfPageParser`**, **`MarkdownPageParser`**, **`CsvPageParser`** — aliases of `UnstructuredPageParser`, for readable call sites.
 
 ### Chunkers — split units into chunks
 
@@ -100,6 +101,6 @@ Every stage is a `Protocol` with concrete implementations. Each module also ship
 
 ### Types
 
-- **`Hash`** — a `blake3` hasher; the content ID returned by parsers.
+- **`Hash`** — a `blake3` hasher.
 - **`DenseEmbedding`** — `list[float]`.
 - **`SparseEmbedding`** — `dict[int, float]` mapping token id to weight.
